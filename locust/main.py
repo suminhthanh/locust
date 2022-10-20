@@ -234,6 +234,13 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
             logger.error("Valid --run-time formats are: 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc.")
             sys.exit(1)
 
+    if options.stop_timeout:
+        try:
+            options.stop_timeout = parse_timespan(options.stop_timeout)
+        except ValueError:
+            logger.error("Valid --stop-timeout formats are: 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc.")
+            sys.exit(1)
+
     if options.csv_prefix:
         stats_csv_writer = StatsCSVFileWriter(
             environment, stats.PERCENTILES_TO_REPORT, options.csv_prefix, options.stats_history_enabled
@@ -272,9 +279,13 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
             logger.error("Credentials supplied with --web-auth should have the format: username:password")
             sys.exit(1)
     else:
-        if options.autostart:
-            logger.warning("Option --autostart is ignored for headless mode and worker process.")
         web_ui = None
+
+    if options.autostart and options.headless:
+        logger.warning("The --autostart argument is implied by --headless, no need to set both.")
+
+    if options.autostart and options.worker:
+        logger.warning("The --autostart argument has no meaning on a worker.")
 
     def assign_equal_weights(environment, **kwargs):
         environment.assign_equal_weights()
@@ -291,7 +302,7 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         main_greenlet = web_ui.greenlet
 
     def stop_and_optionally_quit():
-        if options.autostart:
+        if options.autostart and not options.headless:
             logger.info("--run-time limit reached, stopping test")
             runner.stop()
             if options.autoquit != -1:
@@ -450,7 +461,7 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         logger.info(f"Starting Locust {version}")
         if options.class_picker:
             logger.info("Locust is running with the UserClass Picker Enabled")
-        if options.autostart:
+        if options.autostart and not options.headless:
             start_automatic_run()
 
         main_greenlet.join()

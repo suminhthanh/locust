@@ -1,12 +1,15 @@
+from __future__ import annotations
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Type
+from abc import ABC, abstractmethod
+
+from . import User
 from .runners import Runner
 
 
-class LoadTestShape:
+class LoadTestShape(ABC):
     """
-    A simple load test shape class used to control the shape of load generated
-    during a load test.
+    Base class for custom load shapes.
     """
 
     runner: Optional[Runner] = None
@@ -33,15 +36,16 @@ class LoadTestShape:
         """
         return self.runner.user_count
 
-    def tick(self) -> Optional[Tuple[int, float]]:
+    @abstractmethod
+    def tick(self) -> Tuple[int, float] | Tuple[int, float, Optional[List[Type[User]]]] | None:
         """
         Returns a tuple with 2 elements to control the running load test:
 
             user_count -- Total user count
             spawn_rate -- Number of users to start/stop per second when changing number of users
+            user_classes -- None or a List of userclasses to be spawned in it tick
 
         If `None` is returned then the running load test will be stopped.
 
         """
-
-        return None
+        ...

@@ -28,6 +28,7 @@ from typing import (
     Type,
     Any,
     cast,
+    Callable,
 )
 from uuid import uuid4
 
@@ -64,7 +65,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
 STATE_INIT, STATE_SPAWNING, STATE_RUNNING, STATE_CLEANUP, STATE_STOPPING, STATE_STOPPED, STATE_MISSING = [
     "ready",
     "spawning",
@@ -84,7 +84,6 @@ FALLBACK_INTERVAL = 5
 CONNECT_TIMEOUT = 5
 CONNECT_RETRY_COUNT = 60
 
-
 greenlet_exception_handler = greenlet_exception_logger(logger)
 
 
@@ -93,12 +92,6 @@ class ExceptionDict(TypedDict):
     msg: str
     traceback: str
     nodes: Set[str]
-
-
-class CustomMessageListener(Protocol):
-    @abstractmethod
-    def __call__(self, environment: "Environment", msg: Message) -> None:
-        ...
 
 
 class Runner:
@@ -119,7 +112,7 @@ class Runner:
         self.state = STATE_INIT
         self.spawning_greenlet: Optional[gevent.Greenlet] = None
         self.shape_greenlet: Optional[gevent.Greenlet] = None
-        self.shape_last_state: Optional[Tuple[int, float]] = None
+        self.shape_last_tick: Tuple[int, float] | Tuple[int, float, Optional[List[Type[User]]]] | None = None
         self.current_cpu_usage: int = 0
         self.cpu_warning_emitted: bool = False
         self.worker_cpu_warning_emitted: bool = False
@@ -132,7 +125,7 @@ class Runner:
         self.target_user_classes_count: Dict[str, int] = {}
         # target_user_count is set before the ramp-up/ramp-down occurs.
         self.target_user_count: int = 0
-        self.custom_messages: Dict[str, CustomMessageListener] = {}
+        self.custom_messages: Dict[str, Callable] = {}
 
         self._users_dispatcher: Optional[UsersDispatcher] = None
 
@@ -330,7 +323,9 @@ class Runner:
             gevent.sleep(CPU_MONITOR_INTERVAL)
 
     @abstractmethod
-    def start(self, user_count: int, spawn_rate: float, wait: bool = False) -> None:
+    def start(
+        self, user_count: int, spawn_rate: float, wait: bool = False, user_classes: Optional[List[Type[User]]] = None
+    ) -> None:
         ...
 
     def start_shape(self) -> None:
@@ -351,20 +346,24 @@ class Runner:
     def shape_worker(self) -> None:
         logger.info("Shape worker starting")
         while self.state == STATE_INIT or self.state == STATE_SPAWNING or self.state == STATE_RUNNING:
-            new_state = self.environment.shape_class.tick() if self.environment.shape_class is not None else None
-            if new_state is None:
+            current_tick = self.environment.shape_class.tick() if self.environment.shape_class is not None else None
+            if current_tick is None:
                 logger.info("Shape test stopping")
                 if self.environment.parsed_options and self.environment.parsed_options.headless:
                     self.quit()
                 else:
                     self.stop()
                 self.shape_greenlet = None
-                self.shape_last_state = None
+                self.shape_last_tick = None
                 return
-            elif self.shape_last_state == new_state:
+            elif self.shape_last_tick == current_tick:
                 gevent.sleep(1)
             else:
-                user_count, spawn_rate = new_state
+                if len(current_tick) == 2:
+                    user_count, spawn_rate = current_tick  # type: ignore
+                    user_classes = None
+                else:
+                    user_count, spawn_rate, user_classes = current_tick  # type: ignore
                 logger.info("Shape test updating to %d users at %.2f spawn rate" % (user_count, spawn_rate))
                 # TODO: This `self.start()` call is blocking until the ramp-up is completed. This can leads
                 #       to unexpected behaviours such as the one in the following example:
@@ -379,8 +378,8 @@ class Runner:
                 #        We should probably use a `gevent.timeout` with a duration a little over
                 #        `(user_count - prev_user_count) / spawn_rate` in order to limit the runtime
                 #        of each load test shape stage.
-                self.start(user_count=user_count, spawn_rate=spawn_rate)
-                self.shape_last_state = new_state
+                self.start(user_count=user_count, spawn_rate=spawn_rate, user_classes=user_classes)
+                self.shape_last_tick = current_tick
 
     def stop(self) -> None:
         """
@@ -403,7 +402,7 @@ class Runner:
             if self.shape_greenlet is not None:
                 self.shape_greenlet.kill(block=True)
                 self.shape_greenlet = None
-            self.shape_last_state = None
+            self.shape_last_tick = None
 
         self.stop_users(self.user_classes_count)
 
@@ -428,7 +427,7 @@ class Runner:
         row["nodes"].add(node_id)
         self.exceptions[key] = row
 
-    def register_message(self, msg_type: str, listener: CustomMessageListener) -> None:
+    def register_message(self, msg_type: str, listener: Callable) -> None:
         """
         Register a listener for a custom message from another node
 
@@ -463,7 +462,7 @@ class LocalRunner(Runner):
 
         self.environment.events.user_error.add_listener(on_user_error)
 
-    def _start(self, user_count: int, spawn_rate: float, wait: bool = False) -> None:
+    def _start(self, user_count: int, spawn_rate: float, wait: bool = False, user_classes: list = None) -> None:
         """
         Start running a load test
 
@@ -472,6 +471,8 @@ class LocalRunner(Runner):
         :param wait: If True calls to this method will block until all users are spawned.
                      If False (the default), a greenlet that spawns the users will be
                      started and the call to this method will return immediately.
+        :param user_classes: The user classes to be dispatched, None indicates to use the classes the dispatcher was
+                             invoked with.
         """
         self.target_user_count = user_count
 
@@ -500,7 +501,7 @@ class LocalRunner(Runner):
 
         logger.info("Ramping to %d users at a rate of %.2f per second" % (user_count, spawn_rate))
 
-        cast(UsersDispatcher, self._users_dispatcher).new_dispatch(user_count, spawn_rate)
+        cast(UsersDispatcher, self._users_dispatcher).new_dispatch(user_count, spawn_rate, user_classes)
 
         try:
             for dispatched_users in self._users_dispatcher:
@@ -542,7 +543,9 @@ class LocalRunner(Runner):
 
         self.environment.events.spawning_complete.fire(user_count=sum(self.target_user_classes_count.values()))
 
-    def start(self, user_count: int, spawn_rate: float, wait: bool = False) -> None:
+    def start(
+        self, user_count: int, spawn_rate: float, wait: bool = False, user_classes: Optional[List[Type[User]]] = None
+    ) -> None:
         if spawn_rate > 100:
             logger.warning(
                 "Your selected spawn rate is very high (>100), and this is known to sometimes cause issues. Do you really need to ramp up that fast?"
@@ -551,7 +554,9 @@ class LocalRunner(Runner):
         if self.spawning_greenlet:
             # kill existing spawning_greenlet before we start a new one
             self.spawning_greenlet.kill(block=True)
-        self.spawning_greenlet = self.greenlet.spawn(lambda: self._start(user_count, spawn_rate, wait=wait))
+        self.spawning_greenlet = self.greenlet.spawn(
+            lambda: self._start(user_count, spawn_rate, wait=wait, user_classes=user_classes)
+        )
         self.spawning_greenlet.link_exception(greenlet_exception_handler)
 
     def stop(self) -> None:
@@ -729,7 +734,9 @@ class MasterRunner(DistributedRunner):
             warning_emitted = True
         return warning_emitted
 
-    def start(self, user_count: int, spawn_rate: float, wait=False) -> None:
+    def start(
+        self, user_count: int, spawn_rate: float, wait=False, user_classes: Optional[List[Type[User]]] = None
+    ) -> None:
         self.spawning_completed = False
 
         self.target_user_count = user_count
@@ -771,7 +778,9 @@ class MasterRunner(DistributedRunner):
 
         self.update_state(STATE_SPAWNING)
 
-        self._users_dispatcher.new_dispatch(target_user_count=user_count, spawn_rate=spawn_rate)
+        self._users_dispatcher.new_dispatch(
+            target_user_count=user_count, spawn_rate=spawn_rate, user_classes=user_classes
+        )
 
         try:
             for dispatched_users in self._users_dispatcher:
@@ -872,7 +881,7 @@ class MasterRunner(DistributedRunner):
             ):
                 self.shape_greenlet.kill(block=True)
                 self.shape_greenlet = None
-                self.shape_last_state = None
+                self.shape_last_tick = None
 
             self._users_dispatcher = None
 
@@ -1204,7 +1213,9 @@ class WorkerRunner(DistributedRunner):
 
         self.environment.events.user_error.add_listener(on_user_error)
 
-    def start(self, user_count: int, spawn_rate: float, wait: bool = False) -> None:
+    def start(
+        self, user_count: int, spawn_rate: float, wait: bool = False, user_classes: Optional[List[Type[User]]] = None
+    ) -> None:
         raise NotImplementedError("use start_worker")
 
     def start_worker(self, user_classes_count: Dict[str, int], **kwargs) -> None:

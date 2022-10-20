@@ -7,7 +7,7 @@ from base64 import b64encode
 from urllib.parse import urlparse, urlunparse
 from ssl import SSLError
 import time
-from typing import Callable, Optional, Tuple, Dict, Any, Union
+from typing import Callable, Optional, Tuple, Dict, Any
 
 from http.cookiejar import CookieJar
 
@@ -143,17 +143,17 @@ class FastHttpSession:
         self,
         method: str,
         url: str,
-        name: str = None,
-        data: Union[str, dict] = None,
+        name: str | None = None,
+        data: str | dict | None = None,
         catch_response: bool = False,
         stream: bool = False,
-        headers: dict = None,
+        headers: dict | None = None,
         auth=None,
-        json: dict = None,
+        json: dict | None = None,
         allow_redirects=True,
         context: dict = {},
         **kwargs,
-    ) -> Union[ResponseContextManager, FastResponse]:
+    ) -> ResponseContextManager | FastResponse:
         """
         Send and HTTP request
         Returns :py:class:`locust.contrib.fasthttp.FastResponse` object.
@@ -313,6 +313,9 @@ class FastHttpUser(User):
     insecure: bool = True
     """Parameter passed to FastHttpSession. Default True, meaning no SSL verification."""
 
+    default_headers: Optional[dict] = None
+    """Parameter passed to FastHttpSession. Adds the listed headers to every request."""
+
     concurrency: int = 10
     """Parameter passed to FastHttpSession. Describes number of concurrent requests allowed by the FastHttpSession. Default 10.
     Note that setting this value has no effect when custom client_pool was given, and you need to spawn a your own gevent pool
@@ -348,6 +351,7 @@ class FastHttpUser(User):
             user=self,
             client_pool=self.client_pool,
             ssl_context_factory=self.ssl_context_factory,
+            headers=self.default_headers,
         )
         """
         Instance of HttpSession that is created upon instantiation of User.

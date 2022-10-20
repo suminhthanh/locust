@@ -1,13 +1,47 @@
-# Changelog
-Note that the latest version is usually missing here, check [github](https://github.com/locustio/locust/releases) for the latest info.
+# Detailed changelog
+The most important changes can also be found in [the documentation](https://docs.locust.io/en/latest/changelog.html).
 
-## [2.11.1](https://github.com/locustio/locust/tree/2.11.1) (2022-08-26)
+## [2.12.1](https://github.com/locustio/locust/tree/2.12.1) (2022-09-21)
 
-[Full Changelog](https://github.com/locustio/locust/compare/2.11.1...2.11.1)
+[Full Changelog](https://github.com/locustio/locust/compare/2.12.0...2.12.1)
+
+**Fixed bugs:**
+
+- Editing a running test in the Web UI with class-picker restarts user count back at 0 [\#2204](https://github.com/locustio/locust/issues/2204)
+
+**Closed issues:**
+
+- Add logger when worker is waiting for master to connect [\#2199](https://github.com/locustio/locust/issues/2199)
+- Python 3.10 available for the latest docker hub hosted image  [\#2196](https://github.com/locustio/locust/issues/2196)
+
+**Merged pull requests:**
+
+- black format info is added [\#2212](https://github.com/locustio/locust/pull/2212) ([SamPosh](https://github.com/SamPosh))
+- Second fix for --class-picker resetting user\_count on edits [\#2210](https://github.com/locustio/locust/pull/2210) ([mikenester](https://github.com/mikenester))
+- Bug Fix for User Class Count reset when editing a running test and using --class-picker [\#2207](https://github.com/locustio/locust/pull/2207) ([mikenester](https://github.com/mikenester))
+- Modernize type hints [\#2205](https://github.com/locustio/locust/pull/2205) ([cyberw](https://github.com/cyberw))
+- Allow setting run time from the web UI / http api [\#2202](https://github.com/locustio/locust/pull/2202) ([ajt89](https://github.com/ajt89))
+- Fix parsed options user classes when using class picker [\#2201](https://github.com/locustio/locust/pull/2201) ([mikenester](https://github.com/mikenester))
+- Bump docker base image to Python 3.10 [\#2197](https://github.com/locustio/locust/pull/2197) ([cyberw](https://github.com/cyberw))
+- stats summary refactoring [\#2193](https://github.com/locustio/locust/pull/2193) ([SamPosh](https://github.com/SamPosh))
+
+## [2.12.0](https://github.com/locustio/locust/tree/2.12.0) (2022-09-07)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.11.1...2.12.0)
 
 **Fixed bugs:**
 
 - WebUI `Edit running load test` not carried `user_classes` when enabled `--class-picker` [\#2170](https://github.com/locustio/locust/issues/2170)
+
+**Merged pull requests:**
+
+- Log warning if tag filtering gets rid of all tasks [\#2186](https://github.com/locustio/locust/pull/2186) ([cyberw](https://github.com/cyberw))
+- GitHub Workflows security hardening [\#2184](https://github.com/locustio/locust/pull/2184) ([sashashura](https://github.com/sashashura))
+- ft: LoadTestShapes with custom user classes  [\#2181](https://github.com/locustio/locust/pull/2181) ([samuelspagl](https://github.com/samuelspagl))
+- Bump FastHttpUser/geventhttpclient dependency to 2.0.2 [\#2180](https://github.com/locustio/locust/pull/2180) ([cyberw](https://github.com/cyberw))
+- Allow more recent versions of pyzmq \(it was only 23.0.0 that was broken\) [\#2179](https://github.com/locustio/locust/pull/2179) ([cyberw](https://github.com/cyberw))
+- Bump default concurrency for fast http user to 10 [\#2177](https://github.com/locustio/locust/pull/2177) ([cyberw](https://github.com/cyberw))
+- Web UI style fixes: about dialog cannot be opened in the startup page  [\#2173](https://github.com/locustio/locust/pull/2173) ([alterhu2020](https://github.com/alterhu2020))
 
 ## [2.11.1](https://github.com/locustio/locust/tree/2.11.1) (2022-08-25)
 

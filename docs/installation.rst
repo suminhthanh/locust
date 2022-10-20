@@ -3,33 +3,29 @@
 Installation
 ============
 
-`Install Python <https://docs.python-guide.org/starting/installation/>`_ 3.7 or later, if you don't already have it.
+0. `Install Python <https://docs.python-guide.org/starting/installation/>`_ (3.7 or later)
 
-Install Locust:
+1. Install the package (check `the wiki <https://github.com/locustio/locust/wiki/Installation>`_ if the installation fails)
 
 .. code-block:: console
 
     $ pip3 install locust
 
-Validate your installation:
+2. Validate your installation
 
 .. code-block:: console
     :substitutions:
 
     $ locust -V
-    locust |version|
+    locust |version| from /usr/local/lib/python3.10/site-packages/locust (python 3.10.6)
 
-Now it is time to :ref:`create your first test! <quickstart>`
+3. Done! Now you can :ref:`create your first test <quickstart>`
 
-
-.. note::
-
-    If you have any issues installing, check `the wiki <https://github.com/locustio/locust/wiki/Installation>`_ for possible solutions.
 
 Pre-release builds
 ------------------
 
-If you need the latest and greatest version of Locust and cannot wait for the next proper release, you can install a dev build like this:
+If you need the latest and greatest version of Locust and cannot wait for the next release, you can install a dev build like this:
 
 .. code-block:: console
 

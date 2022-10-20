@@ -348,10 +348,97 @@ class TestWebUI(LocustTestCase, _HeaderCheckMixin):
         self.assertEqual(self.environment.host, "https://localhost")
         self.assertListEqual(["User1", "User2"], response.json()["user_classes"])
 
+        self.assertIsNotNone(self.environment.locustfile, "verify locustfile is not empty")
+        self.assertEqual(self.environment.locustfile, "User1,User2", "Verify locustfile variable used in web ui title")
+
         # stop
         gevent.sleep(1)
         response = requests.get("http://127.0.0.1:%i/stop" % self.web_port)
         self.assertEqual(response.json()["message"], "Test stopped")
+
+    def test_swarm_updates_parsed_options_when_single_userclass_specified(self):
+        """
+        This test validates that environment.parsed_options.user_classes isn't overwritten
+        when /swarm is hit with 'user_classes' in the data.
+        """
+
+        class User1(User):
+            wait_time = constant(1)
+
+            @task
+            def t(self):
+                pass
+
+        class User2(User):
+            wait_time = constant(1)
+
+            @task
+            def t(self):
+                pass
+
+        self.environment.web_ui.userclass_picker_is_active = True
+        self.environment.available_user_classes = {"User1": User1, "User2": User2}
+
+        response = requests.post(
+            "http://127.0.0.1:%i/swarm" % self.web_port,
+            data={
+                "user_count": 5,
+                "spawn_rate": 5,
+                "host": "https://localhost",
+                "user_classes": ["User1"],
+            },
+        )
+        self.assertListEqual(["User1"], response.json()["user_classes"])
+
+        # stop
+        gevent.sleep(1)
+        response = requests.get("http://127.0.0.1:%i/stop" % self.web_port)
+        self.assertEqual(response.json()["message"], "Test stopped")
+
+        # Checking environment.parsed_options.user_classes was updated
+        self.assertListEqual(self.environment.parsed_options.user_classes, ["User1"])
+
+    def test_swarm_updates_parsed_options_when_multiple_userclasses_specified(self):
+        """
+        This test validates that environment.parsed_options.user_classes isn't overwritten
+        when /swarm is hit with 'user_classes' in the data.
+        """
+
+        class User1(User):
+            wait_time = constant(1)
+
+            @task
+            def t(self):
+                pass
+
+        class User2(User):
+            wait_time = constant(1)
+
+            @task
+            def t(self):
+                pass
+
+        self.environment.web_ui.userclass_picker_is_active = True
+        self.environment.available_user_classes = {"User1": User1, "User2": User2}
+
+        response = requests.post(
+            "http://127.0.0.1:%i/swarm" % self.web_port,
+            data={
+                "user_count": 5,
+                "spawn_rate": 5,
+                "host": "https://localhost",
+                "user_classes": ["User1", "User2"],
+            },
+        )
+        self.assertListEqual(["User1", "User2"], response.json()["user_classes"])
+
+        # stop
+        gevent.sleep(1)
+        response = requests.get("http://127.0.0.1:%i/stop" % self.web_port)
+        self.assertEqual(response.json()["message"], "Test stopped")
+
+        # Checking environment.parsed_options.user_classes was updated
+        self.assertListEqual(self.environment.parsed_options.user_classes, ["User1", "User2"])
 
     def test_swarm_defaults_to_all_available_userclasses_when_userclass_picker_is_active_and_no_userclass_in_payload(
         self,
@@ -653,6 +740,81 @@ class TestWebUI(LocustTestCase, _HeaderCheckMixin):
         self.assertEqual(200, response.status_code)
         self.assertEqual(None, response.json()["host"])
         self.assertEqual(self.environment.host, None)
+
+    def test_swarm_run_time(self):
+        class MyUser(User):
+            wait_time = constant(1)
+
+            @task(1)
+            def my_task(self):
+                pass
+
+        self.environment.user_classes = [MyUser]
+        self.environment.web_ui.parsed_options = parse_options()
+        response = requests.post(
+            "http://127.0.0.1:%i/swarm" % self.web_port,
+            data={"user_count": 5, "spawn_rate": 5, "host": "https://localhost", "run_time": "1s"},
+        )
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("https://localhost", response.json()["host"])
+        self.assertEqual(self.environment.host, "https://localhost")
+        self.assertEqual(1, response.json()["run_time"])
+        # wait for test to run
+        gevent.sleep(3)
+        response = requests.get("http://127.0.0.1:%i/stats/requests" % self.web_port)
+        self.assertEqual("stopped", response.json()["state"])
+
+    def test_swarm_run_time_invalid_input(self):
+        class MyUser(User):
+            wait_time = constant(1)
+
+            @task(1)
+            def my_task(self):
+                pass
+
+        self.environment.user_classes = [MyUser]
+        self.environment.web_ui.parsed_options = parse_options()
+        response = requests.post(
+            "http://127.0.0.1:%i/swarm" % self.web_port,
+            data={"user_count": 5, "spawn_rate": 5, "host": "https://localhost", "run_time": "bad"},
+        )
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(False, response.json()["success"])
+        self.assertEqual(self.environment.host, "https://localhost")
+        self.assertEqual(
+            "Valid run_time formats are : 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc.", response.json()["message"]
+        )
+        # verify test was not started
+        response = requests.get("http://127.0.0.1:%i/stats/requests" % self.web_port)
+        self.assertEqual("ready", response.json()["state"])
+        requests.get("http://127.0.0.1:%i/stats/reset" % self.web_port)
+
+    def test_swarm_run_time_empty_input(self):
+        class MyUser(User):
+            wait_time = constant(1)
+
+            @task(1)
+            def my_task(self):
+                pass
+
+        self.environment.user_classes = [MyUser]
+        self.environment.web_ui.parsed_options = parse_options()
+        response = requests.post(
+            "http://127.0.0.1:%i/swarm" % self.web_port,
+            data={"user_count": 5, "spawn_rate": 5, "host": "https://localhost", "run_time": ""},
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("https://localhost", response.json()["host"])
+        self.assertEqual(self.environment.host, "https://localhost")
+
+        # verify test is running
+        gevent.sleep(1)
+        response = requests.get("http://127.0.0.1:%i/stats/requests" % self.web_port)
+        self.assertEqual("running", response.json()["state"])
+
+        # stop
+        response = requests.get("http://127.0.0.1:%i/stop" % self.web_port)
 
     def test_host_value_from_user_class(self):
         class MyUser(User):

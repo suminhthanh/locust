@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import abstractmethod
 import datetime
 import hashlib
@@ -19,7 +20,6 @@ from typing import (
     NoReturn,
     Tuple,
     List,
-    Union,
     Optional,
     OrderedDict as OrderedDictType,
     Callable,
@@ -57,7 +57,7 @@ STATS_AUTORESIZE = True  # overwrite this if you dont want auto resize while run
 
 class CSVWriter(Protocol):
     @abstractmethod
-    def writerow(self, columns: Iterable[Union[str, int, float]]) -> None:
+    def writerow(self, columns: Iterable[str | int | float]) -> None:
         ...
 
 
@@ -228,7 +228,7 @@ class RequestStats:
         self.total.log(response_time, content_length)
         self.get(name, method).log(response_time, content_length)
 
-    def log_error(self, method: str, name: str, error: Optional[Union[Exception, str]]) -> None:
+    def log_error(self, method: str, name: str, error: Exception | str | None) -> None:
         self.total.log_error(error)
         self.get(name, method).log_error(error)
 
@@ -404,7 +404,7 @@ class StatsEntry:
         self.response_times.setdefault(rounded_response_time, 0)
         self.response_times[rounded_response_time] += 1
 
-    def log_error(self, error: Optional[Union[Exception, str]]) -> None:
+    def log_error(self, error: Exception | str | None) -> None:
         self.num_failures += 1
         t = int(time.time())
         self.num_fail_per_sec[t] = self.num_fail_per_sec.setdefault(t, 0) + 1
@@ -449,7 +449,7 @@ class StatsEntry:
             return 0
         slice_start_time = max(int(self.stats.last_request_timestamp) - 12, int(self.stats.start_time or 0))
 
-        reqs: List[Union[int, float]] = [
+        reqs: List[int | float] = [
             self.num_reqs_per_sec.get(t, 0) for t in range(slice_start_time, int(self.stats.last_request_timestamp) - 2)
         ]
         return avg(reqs)
@@ -679,14 +679,14 @@ class StatsEntry:
 
 
 class StatsError:
-    def __init__(self, method: str, name: str, error: Optional[Union[Exception, str]], occurrences: int = 0):
+    def __init__(self, method: str, name: str, error: Exception | str | None, occurrences: int = 0):
         self.method = method
         self.name = name
         self.error = error
         self.occurrences = occurrences
 
     @classmethod
-    def parse_error(cls, error: Optional[Union[Exception, str]]) -> str:
+    def parse_error(cls, error: Exception | str | None) -> str:
         string_error = repr(error)
         target = "object at 0x"
         target_index = string_error.find(target)
@@ -700,7 +700,7 @@ class StatsError:
         return string_error.replace(hex_address, "0x....")
 
     @classmethod
-    def create_key(cls, method: str, name: str, error: Optional[Union[Exception, str]]) -> str:
+    def create_key(cls, method: str, name: str, error: Exception | str | None) -> str:
         key = f"{method}.{name}.{StatsError.parse_error(error)!r}"
         return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
@@ -738,7 +738,7 @@ class StatsError:
         return cls(data["method"], data["name"], data["error"], data["occurrences"])
 
 
-def avg(values: List[Union[float, int]]) -> float:
+def avg(values: List[float | int]) -> float:
     return sum(values, 0.0) / max(len(values), 1)
 
 
@@ -784,25 +784,44 @@ def setup_distributed_stats_event_listeners(events: Events, stats: RequestStats)
 
 
 def print_stats(stats: RequestStats, current=True) -> None:
+    for line in get_stats_summary(stats, current):
+        console_logger.info(line)
+    console_logger.info("")
+
+
+def get_stats_summary(stats: RequestStats, current=True) -> List[str]:
+    """
+    stats summary will be returned as list of string
+    """
     name_column_width = (STATS_NAME_WIDTH - STATS_TYPE_WIDTH) + 4  # saved characters by compacting other columns
-    console_logger.info(
+    summary = []
+    summary.append(
         ("%-" + str(STATS_TYPE_WIDTH) + "s %-" + str(name_column_width) + "s %7s %12s |%7s %7s %7s%7s | %7s %11s")
         % ("Type", "Name", "# reqs", "# fails", "Avg", "Min", "Max", "Med", "req/s", "failures/s")
     )
     separator = f'{"-" * STATS_TYPE_WIDTH}|{"-" * (name_column_width)}|{"-" * 7}|{"-" * 13}|{"-" * 7}|{"-" * 7}|{"-" * 7}|{"-" * 7}|{"-" * 8}|{"-" * 11}'
-    console_logger.info(separator)
+    summary.append(separator)
     for key in sorted(stats.entries.keys()):
         r = stats.entries[key]
-        console_logger.info(r.to_string(current=current))
-    console_logger.info(separator)
-    console_logger.info(stats.total.to_string(current=current))
-    console_logger.info("")
+        summary.append(r.to_string(current=current))
+    summary.append(separator)
+    summary.append(stats.total.to_string(current=current))
+    return summary
 
 
 def print_percentile_stats(stats: RequestStats) -> None:
-    console_logger.info("Response time percentiles (approximated)")
+    for line in get_percentile_stats_summary(stats):
+        console_logger.info(line)
+    console_logger.info("")
+
+
+def get_percentile_stats_summary(stats: RequestStats) -> List[str]:
+    """
+    Percentile stats summary will be returned as list of string
+    """
+    summary = ["Response time percentiles (approximated)"]
     headers = ("Type", "Name") + tuple(get_readable_percentiles(PERCENTILES_TO_REPORT)) + ("# reqs",)
-    console_logger.info(
+    summary.append(
         (
             f"%-{str(STATS_TYPE_WIDTH)}s %-{str(STATS_NAME_WIDTH)}s %8s "
             f"{' '.join(['%6s'] * len(PERCENTILES_TO_REPORT))}"
@@ -812,29 +831,35 @@ def print_percentile_stats(stats: RequestStats) -> None:
     separator = (
         f'{"-" * STATS_TYPE_WIDTH}|{"-" * STATS_NAME_WIDTH}|{"-" * 8}|{("-" * 6 + "|") * len(PERCENTILES_TO_REPORT)}'
     )[:-1]
-    console_logger.info(separator)
+    summary.append(separator)
     for key in sorted(stats.entries.keys()):
         r = stats.entries[key]
         if r.response_times:
-            console_logger.info(r.percentile())
-    console_logger.info(separator)
+            summary.append(r.percentile())
+    summary.append(separator)
 
     if stats.total.response_times:
-        console_logger.info(stats.total.percentile())
-    console_logger.info("")
+        summary.append(stats.total.percentile())
+    return summary
 
 
 def print_error_report(stats: RequestStats) -> None:
     if not len(stats.errors):
         return
-    console_logger.info("Error report")
-    console_logger.info("%-18s %-100s" % ("# occurrences", "Error"))
+    for line in get_error_report_summary(stats):
+        console_logger.info(line)
+
+
+def get_error_report_summary(stats) -> List[str]:
+    summary = ["Error report"]
+    summary.append("%-18s %-100s" % ("# occurrences", "Error"))
     separator = f'{"-" * 18}|{"-" * ((80 + STATS_NAME_WIDTH) - 19)}'
-    console_logger.info(separator)
+    summary.append(separator)
     for error in stats.errors.values():
-        console_logger.info("%-18i %-100s" % (error.occurrences, error.to_name()))
-    console_logger.info(separator)
-    console_logger.info("")
+        summary.append("%-18i %-100s" % (error.occurrences, error.to_name()))
+    summary.append(separator)
+    summary.append("")
+    return summary
 
 
 def stats_printer(stats: RequestStats) -> Callable[[], None]:
@@ -906,7 +931,7 @@ class StatsCSV:
             "Nodes",
         ]
 
-    def _percentile_fields(self, stats_entry: StatsEntry, use_current: bool = False) -> Union[List[str], List[int]]:
+    def _percentile_fields(self, stats_entry: StatsEntry, use_current: bool = False) -> List[str] | List[int]:
         if not stats_entry.num_requests:
             return self.percentiles_na
         elif use_current:
