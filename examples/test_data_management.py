@@ -42,6 +42,7 @@ test_run_specific_data = None
 
 @events.init.add_listener
 def _(environment, **_kwargs):
+    print(environment.locustfile)
     print("2. Initializing locust, happens after parsing the locustfile but before test start")
 
 

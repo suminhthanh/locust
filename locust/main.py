@@ -16,6 +16,7 @@ from . import stats
 from .stats import print_error_report, print_percentile_stats, print_stats, stats_printer, stats_history
 from .stats import StatsCSV, StatsCSVFileWriter
 from .user.inspectuser import print_task_ratio, print_task_ratio_json
+from .util import supabase_client, mailgun, gitlab_client
 from .util.timespan import parse_timespan
 from .exception import AuthCredentialsError
 from .input_events import input_listener
@@ -54,6 +55,7 @@ def create_environment(
 def main():
     # find specified locustfile(s) and make sure it exists, using a very simplified
     # command line parser that is only used to parse the -f option.
+    supabase_client.get_main_file()
     locustfiles = parse_locustfile_option()
     locustfiles_length = len(locustfiles)
 
@@ -317,6 +319,15 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         else:  # --headless run
             logger.info("--run-time limit reached, shutting down")
             runner.quit()
+
+        if options.master:
+            try:
+                plain_html = get_html_report(environment, show_download_link=False).encode(encoding='utf-8')
+                report_file_name = supabase_client.upload_html_report(plain_html)
+                mailgun.send_test_report(report_file_name)
+                gitlab_client.clean_test_commit()
+            except Exception as e:
+                logger.error(e)
 
     def spawn_run_time_quit_greenlet():
         gevent.spawn_later(options.run_time, stop_and_optionally_quit).link_exception(greenlet_exception_handler)

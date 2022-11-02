@@ -9,8 +9,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY . /build
 RUN pip install /build/
 RUN pip install faker
-RUN pip install boto3
-RUN pip install pytz
+RUN pip install boto3 pytz supabase cffi cryptography pycparser PyJWT
 
 
 FROM base
