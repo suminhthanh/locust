@@ -32,6 +32,8 @@ from typing import (
 )
 from uuid import uuid4
 
+from .util import supabase_client
+
 # @TODO: typing.Protocol is in python >= 3.8
 try:
     from typing import Protocol, TypedDict
@@ -150,6 +152,7 @@ class Runner:
         # register listener that resets stats when spawning is complete
         def on_spawning_complete(user_count: int) -> None:
             self.update_state(STATE_RUNNING)
+            supabase_client.update_run_status(self.state.upper())
             if environment.reset_stats:
                 logger.info("Resetting stats\n")
                 self.stats.reset_all()
@@ -228,6 +231,7 @@ class Runner:
     def spawn_users(self, user_classes_spawn_count: Dict[str, int], wait: bool = False):
         if self.state == STATE_INIT or self.state == STATE_STOPPED:
             self.update_state(STATE_SPAWNING)
+            supabase_client.update_run_status(self.state.upper())
 
         logger.debug(
             "Spawning additional %s (%s already running)..."
@@ -338,6 +342,7 @@ class Runner:
 
         logger.info("Shape test starting. User count and spawn rate are ignored for this type of load test")
         self.update_state(STATE_INIT)
+        supabase_client.update_run_status(self.state.upper())
         self.shape_greenlet = self.greenlet.spawn(self.shape_worker)
         self.shape_greenlet.link_exception(greenlet_exception_handler)
         if self.environment.shape_class is not None:
@@ -391,6 +396,7 @@ class Runner:
         self.environment.events.test_stopping.fire(environment=self.environment)
         self.final_user_classes_count = {**self.user_classes_count}
         self.update_state(STATE_CLEANUP)
+        supabase_client.update_run_status(self.state.upper())
 
         # if we are currently spawning users we need to kill the spawning greenlet first
         if self.spawning_greenlet and not self.spawning_greenlet.ready():
@@ -409,6 +415,7 @@ class Runner:
         self._users_dispatcher = None
 
         self.update_state(STATE_STOPPED)
+        supabase_client.update_run_status(self.state.upper())
 
         self.cpu_log_warning()
         self.environment.events.test_stop.fire(environment=self.environment)
@@ -493,6 +500,8 @@ class LocalRunner(Runner):
 
         if self.state != STATE_INIT and self.state != STATE_STOPPED:
             self.update_state(STATE_SPAWNING)
+            supabase_client.update_run_status(self.state.upper())
+
 
         if self._users_dispatcher is None:
             self._users_dispatcher = UsersDispatcher(
@@ -777,6 +786,7 @@ class MasterRunner(DistributedRunner):
                 self.environment.shape_class.reset_time()
 
         self.update_state(STATE_SPAWNING)
+        supabase_client.update_run_status(self.state.upper())
 
         self._users_dispatcher.new_dispatch(
             target_user_count=user_count, spawn_rate=spawn_rate, user_classes=user_classes
@@ -873,6 +883,7 @@ class MasterRunner(DistributedRunner):
             self.environment.events.test_stopping.fire(environment=self.environment)
             self.final_user_classes_count = {**self.reported_user_classes_count}
             self.update_state(STATE_STOPPING)
+            supabase_client.update_run_status(self.state.upper())
 
             if (
                 self.environment.shape_class is not None
@@ -934,6 +945,7 @@ class MasterRunner(DistributedRunner):
             )
         ):
             self.update_state(STATE_STOPPED)
+            supabase_client.update_run_status(self.state.upper())
 
     def heartbeat_worker(self) -> NoReturn:
         while True:

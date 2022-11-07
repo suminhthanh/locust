@@ -15,6 +15,8 @@ SUPABASE_LOCUSTFILE_PATH = os.getenv('SUPABASE_LOCUSTFILE_PATH')
 SUPABASE_STATS_BUCKET = "stats"
 SUPABASE_LOCUSTFILE_BUCKET = "locustfiles"
 
+RUN_ID = os.getenv("RUN_ID")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
@@ -43,6 +45,7 @@ def upload_html_report(html_content):
                              "ContentType": "text/html"
                          })
         logger.info(f"Uploaded {report_file_name} to Supabase")
+        update_html_url(report_file_name)
     except Exception as e:
         logger.error(f"Failed to upload html report {e}")
 
@@ -68,3 +71,25 @@ def get_main_file():
         logger.info("Downloaded main.py from Supabase")
     except Exception as e:
         logger.error(f"Failed to download main.py from Supabase {e}")
+
+
+def update_run_status(status):
+    try:
+        logger.info(f"Updating run status: {status}")
+        supabase.table("results").update({
+            "run_status": status,
+        }).eq("run_id", RUN_ID).execute()
+        logger.info(f"Updated run status: {status}")
+    except Exception as e:
+        logger.error(f"Failed to update run status {e}")
+
+
+def update_html_url(report_file_name):
+    try:
+        logger.info(f"Updating html_url: {report_file_name}")
+        supabase.table("results").update({
+            "html_url": f"https://html-render.deno.dev/?url={SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STATS_BUCKET}/{report_file_name} "
+        }).eq("run_id", RUN_ID).execute()
+        logger.info(f"Updated html_url: {report_file_name}")
+    except Exception as e:
+        logger.error(f"Failed to update html_url {e}")

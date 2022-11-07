@@ -482,5 +482,6 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         if options.html_file:
             save_html_report()
     except Exception:
+        supabase_client.update_run_status("FAILED")
         raise
     shutdown()
