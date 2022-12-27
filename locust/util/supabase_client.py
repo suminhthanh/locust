@@ -16,6 +16,7 @@ SUPABASE_STATS_BUCKET = "stats"
 SUPABASE_LOCUSTFILE_BUCKET = "locustfiles"
 
 RUN_ID = os.getenv("RUN_ID")
+APP_SERVER_URL = os.getenv("APP_SERVER_URL")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -88,7 +89,7 @@ def update_html_url(report_file_name):
     try:
         logger.info(f"Updating html_url: {report_file_name}")
         supabase.table("results").update({
-            "html_url": f"https://html-render.deno.dev/?url={SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STATS_BUCKET}/{report_file_name} "
+            "html_url": f"{APP_SERVER_URL}?url={SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STATS_BUCKET}/{report_file_name} "
         }).eq("run_id", RUN_ID).execute()
         logger.info(f"Updated html_url: {report_file_name}")
     except Exception as e:

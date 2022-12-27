@@ -20,6 +20,7 @@ LOCUST_HOST = os.getenv('LOCUST_HOST')
 LOCUST_USERS = os.getenv('LOCUST_USERS')
 LOCUST_SPAWN_RATE = os.getenv('LOCUST_SPAWN_RATE')
 LOCUST_RUN_TIME = os.getenv('LOCUST_RUN_TIME')
+APP_SERVER_URL = os.getenv('APP_SERVER_URL')
 
 
 def send_simple_message(to, subject, content):
@@ -41,7 +42,7 @@ def send_test_report(report_file_name):
             f"Number of users: {LOCUST_USERS}\n"
             f"Spawn rate (users started/second): {LOCUST_SPAWN_RATE}\n"
             f"Run time: {LOCUST_RUN_TIME}\n"
-            f"More detail: https://html-render.deno.dev/?url={SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STATS_BUCKET}/{report_file_name}")
+            f"More detail: {APP_SERVER_URL}?url={SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STATS_BUCKET}/{report_file_name}")
         logger.info(f"Sent email to {REPORT_TO_EMAIL}, {mailgun_response.text}")
     except Exception as e:
         logger.error(f"Failed to sent test report {e}")
