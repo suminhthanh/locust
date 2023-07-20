@@ -1,8 +1,8 @@
 .. _testing-other-systems:
 
-========================
-Testing non-HTTP systems
-========================
+===============================
+Testing other systems/protocols
+===============================
 
 Locust only comes with built-in support for HTTP/HTTPS but it can be extended to test almost any system. This is normally done by wrapping the protocol library and triggering a :py:attr:`request <locust.event.Events.request>` event after each call has completed, to let Locust know what happened.
 
@@ -14,10 +14,10 @@ Locust only comes with built-in support for HTTP/HTTPS but it can be extended to
 
     Some C libraries allow for other workarounds. For example, if you want to use psycopg2 to performance test PostgreSQL, you can use `psycogreen <https://github.com/psycopg/psycogreen/>`_. If you are willing to get your hands dirty, you may also be able to patch a library yourself, but that is beyond the scope of this documentation.
 
-Example: writing an XML-RPC User/client
-=======================================
+XML-RPC
+=======
 
-Lets assume we had an XML-RPC server that we wanted to load test.
+Lets assume we have an XML-RPC server that we want to load test.
 
 .. literalinclude:: ../examples/custom_xmlrpc_client/server.py
 
@@ -25,26 +25,41 @@ We can build a generic XML-RPC client, by wrapping :py:class:`xmlrpc.client.Serv
 
 .. literalinclude:: ../examples/custom_xmlrpc_client/xmlrpc_locustfile.py
 
-Example: writing a gRPC User/client
-=======================================
+gRPC
+====
 
-If you have understood the XML-RPC example, you can easily build a `gRPC <https://github.com/grpc/grpc>`_ User.
-
-The only significant difference is that you need to make gRPC gevent-compatible, by executing this code before opening the channel:
-
-.. code-block:: python
-
-    import grpc.experimental.gevent as grpc_gevent
-
-    grpc_gevent.init_gevent()
-
-Dummy server to test:
+Lets assume we have a `gRPC <https://github.com/grpc/grpc>`_ server that we want to load test:
 
 .. literalinclude:: ../examples/grpc/hello_server.py
 
-gRPC client, base User and example usage:
+The generic GrpcUser base class sends events to Locust using an `interceptor <https://pypi.org/project/grpc-interceptor/>`_:
+
+.. literalinclude:: ../examples/grpc/grpc_user.py
+
+And a locustfile using the above would look like this:
 
 .. literalinclude:: ../examples/grpc/locustfile.py
 
+.. _testing-request-sdks:
 
-For more examples of user types, see `locust-plugins <https://github.com/SvenskaSpel/locust-plugins#users>`_ (it has users for WebSocket/SocketIO, Kafka, Selenium/WebDriver and more).
+requests-based libraries/SDKs
+=============================
+
+If you want to use a library that uses a `requests.Session <https://requests.readthedocs.io/en/latest/api/#requests.Session>`_ object under the hood you will most likely be able to skip all the above complexity.
+
+Some libraries allow you to pass a Session explicitly, like for example the SOAP client provided by `Zeep <https://docs.python-zeep.org/en/master/transport.html#tls-verification>`_. In that case, just pass it your ``HttpUser``'s :py:attr:`client <locust.HttpUser.client>`, and any requests made using the library will be logged in Locust.
+
+Even if your library doesn't expose that in its interface, you may be able to get it working by overwriting some internally used Session. Here's an example of how to do that for the `Archivist <https://github.com/jitsuin-inc/archivist-python>`_ client.
+
+.. literalinclude:: ../examples/sdk_session_patching/session_patch_locustfile.py
+
+REST
+====
+
+See :ref:`FastHttpUser <rest>`
+
+Other examples
+==============
+
+See `locust-plugins <https://github.com/SvenskaSpel/locust-plugins#users>`_ it has users for WebSocket/SocketIO, Kafka, Selenium/WebDriver, Playwright and more.
+

@@ -81,6 +81,7 @@ extensions = [
     "sphinx_substitution_extensions",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.viewcode",
     "sphinx_search.extension",
 ]
 
@@ -144,7 +145,7 @@ html_file_suffix = ".html"
 
 
 # on_rtd is whether we are on readthedocs.org, this line of code grabbed from docs.readthedocs.org
-on_rtd = os.environ.get("READTHEDOCS", None) == "True"
+on_rtd = os.environ.get("READTHEDOCS") == "True"
 
 if not on_rtd:  # only import and set the theme if we're building docs locally
     import sphinx_rtd_theme

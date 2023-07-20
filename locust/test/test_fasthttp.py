@@ -129,7 +129,7 @@ class TestFastHttpSession(WebserverTestCase):
         r = s.post("/request_method", json={"foo": "bar"})
         self.assertEqual(200, r.status_code)
         self.assertEqual(r.request.body, '{"foo": "bar"}')
-        self.assertEqual(r.request.headers.get("Content-Type", None), "application/json")
+        self.assertEqual(r.request.headers.get("Content-Type"), "application/json")
 
     def test_catch_response_fail_successful_request(self):
         s = self.get_client()
@@ -375,8 +375,8 @@ class TestFastHttpUserClass(WebserverTestCase):
         locust = MyUser(self.environment)
         r = locust.client.get("/request_header_test", headers={"X-Header-Test": "hello"})
         self.assertEqual("hello", r.text)
-        self.assertEqual("hello", r.headers.get("X-Header-Test", None))
-        self.assertEqual("hello", r.request.headers.get("X-Header-Test", None))
+        self.assertEqual("hello", r.headers.get("X-Header-Test"))
+        self.assertEqual("hello", r.request.headers.get("X-Header-Test"))
 
     def test_client_get(self):
         class MyUser(FastHttpUser):
@@ -693,29 +693,29 @@ class TestFastHttpCatchResponse(WebserverTestCase):
         self.assertRaises(LocustError, r.success)
         self.assertRaises(LocustError, r.failure, "")
 
-    def test_deprecated_request_events(self):
-        status = {"success_amount": 0, "failure_amount": 0}
-
-        def on_success(**kw):
-            status["success_amount"] += 1
-
-        def on_failure(**kw):
-            status["failure_amount"] += 1
-
-        self.environment.events.request_success.add_listener(on_success)
-        self.environment.events.request_failure.add_listener(on_failure)
-        with self.user.client.get("/ultra_fast", catch_response=True) as response:
-            pass
-        with self.user.client.get("/wrong_url", catch_response=True) as response:
-            pass
-
-        self.assertEqual(1, status["success_amount"])
-        self.assertEqual(1, status["failure_amount"])
-
     def test_missing_catch_response_true(self):
         # incorrect usage, missing catch_response=True
         with self.user.client.get("/fail") as resp:
             self.assertRaises(LocustError, resp.success)
+
+    def test_rest_success(self):
+        self.last_failure_exception = None
+        with self.user.rest("POST", "/rest", json={"foo": "bar"}) as response:
+            assert response.js["foo"] == "bar"
+
+        self.assertEqual(0, self.num_failures)
+        self.assertEqual(1, self.num_success)
+
+    def test_rest_fail(self):
+        with self.user.rest("POST", "/rest", json={"foo": "bar"}) as response:
+            assert response.js["foo"] == "NOPE"
+
+        self.assertTrue(
+            isinstance(self.last_failure_exception, CatchResponseError),
+            "Failure event handler should have been passed a CatchResponseError instance",
+        )
+        self.assertEqual(1, self.num_failures)
+        self.assertEqual(0, self.num_success)
 
 
 class TestFastHttpSsl(LocustTestCase):

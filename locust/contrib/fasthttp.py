@@ -4,10 +4,13 @@ import socket
 import json
 import json as unshadowed_json  # some methods take a named parameter called json
 from base64 import b64encode
+from contextlib import contextmanager
+from json.decoder import JSONDecodeError
 from urllib.parse import urlparse, urlunparse
 from ssl import SSLError
 import time
-from typing import Callable, Optional, Tuple, Dict, Any
+import traceback
+from typing import Callable, Optional, Tuple, Dict, Any, Generator, cast
 
 from http.cookiejar import CookieJar
 
@@ -127,13 +130,12 @@ class FastHttpSession:
             if hasattr(e, "response"):
                 r = e.response
             else:
-                safe_kwargs = kwargs or {}
                 req = self.client._make_request(
                     url,
                     method=method,
-                    headers=safe_kwargs.get("headers", None),
-                    payload=safe_kwargs.get("payload", None),
-                    params=safe_kwargs.get("params", None),
+                    headers=kwargs.get("headers"),
+                    payload=kwargs.get("payload"),
+                    params=kwargs.get("params"),
                 )
                 r = ErrorResponse(url=url, request=req)
             r.error = e
@@ -284,15 +286,9 @@ class FastHttpSession:
 
 class FastHttpUser(User):
     """
-    FastHttpUser uses a different HTTP client (geventhttpclient) compared to HttpUser (python-requests).
-    It's significantly faster, but not as capable.
-
-    The behaviour of this user is defined by it's tasks. Tasks can be declared either directly on the
-    class by using the :py:func:`@task decorator <locust.task>` on the methods, or by setting
-    the :py:attr:`tasks attribute <locust.User.tasks>`.
-
-    This class creates a *client* attribute on instantiation which is an HTTP client with support
-    for keeping a user session between requests.
+    FastHttpUser provides the same API as HttpUser, but uses geventhttpclient instead of python-requests
+    as its underlying client. It uses considerably less CPU on the load generator, and should work
+    as a simple drop-in-replacement in most cases.
     """
 
     # Below are various UserAgent settings. Change these in your subclass to alter FastHttpUser's behaviour.
@@ -330,6 +326,8 @@ class FastHttpUser(User):
     abstract = True
     """Dont register this as a User class that can be run by itself"""
 
+    _callstack_regex = re.compile(r'  File "(\/.[^"]*)", line (\d*),(.*)')
+
     def __init__(self, environment):
         super().__init__(environment)
         if self.host is None:
@@ -357,6 +355,69 @@ class FastHttpUser(User):
         Instance of HttpSession that is created upon instantiation of User.
         The client support cookies, and therefore keeps the session between HTTP requests.
         """
+
+    @contextmanager
+    def rest(
+        self, method, url, headers: Optional[dict] = None, **kwargs
+    ) -> Generator[RestResponseContextManager, None, None]:
+        """
+        A wrapper for self.client.request that:
+
+        * Parses the JSON response to a dict called ``js`` in the response object. Marks the request as failed if the response was not valid JSON.
+        * Defaults ``Content-Type`` and ``Accept`` headers to ``application/json``
+        * Sets ``catch_response=True`` (so always use a :ref:`with-block <catch-response>`)
+        * Catches any unhandled exceptions thrown inside your with-block, marking the sample as failed (instead of exiting the task immediately without even firing the request event)
+        """
+        headers = headers or {}
+        if not ("Content-Type" in headers or "content-type" in headers):
+            headers["Content-Type"] = "application/json"
+        if not ("Accept" in headers or "accept" in headers):
+            headers["Accept"] = "application/json"
+        with self.client.request(method, url, catch_response=True, headers=headers, **kwargs) as r:
+            resp = cast(RestResponseContextManager, r)
+            resp.js = None  # type: ignore
+            if resp.text is None:
+                resp.failure(str(resp.error))
+            elif resp.text:
+                try:
+                    resp.js = resp.json()
+                except JSONDecodeError as e:
+                    resp.failure(
+                        f"Could not parse response as JSON. {resp.text[:250]}, response code {resp.status_code}, error {e}"
+                    )
+            try:
+                yield resp
+            except AssertionError as e:
+                if e.args:
+                    if e.args[0].endswith(","):
+                        short_resp = resp.text[:200] if resp.text else resp.text
+                        resp.failure(f"{e.args[0][:-1]}, response was {short_resp}")
+                    else:
+                        resp.failure(e.args[0])
+                else:
+                    resp.failure("Assertion failed")
+
+            except Exception as e:
+                error_lines = []
+                for l in traceback.format_exc().split("\n"):
+                    m = self._callstack_regex.match(l)
+                    if m:
+                        filename = re.sub(r"/(home|Users/\w*)/", "~/", m.group(1))
+                        error_lines.append(filename + ":" + m.group(2) + m.group(3))
+                    short_resp = resp.text[:200] if resp.text else resp.text
+                    resp.failure(f"{e.__class__.__name__}: {e} at {', '.join(error_lines)}. Response was {short_resp}")
+
+    @contextmanager
+    def rest_(self, method, url, name=None, **kwargs) -> Generator[RestResponseContextManager, None, None]:
+        """
+        Some REST api:s use a timestamp as part of their query string (mainly to break through caches).
+        This is a convenience method for that, appending a _=<timestamp> parameter automatically
+        """
+        separator = "&" if "?" in url else "?"
+        if name is None:
+            name = url + separator + "_=..."
+        with self.rest(method, f"{url}{separator}_={int(time.time()*1000)}", name=name, **kwargs) as resp:
+            yield resp
 
 
 class FastRequest(CompatRequest):
@@ -429,7 +490,7 @@ class FastResponse(CompatResponse):
         We override status_code in order to return None if no valid response was
         returned. E.g. in the case of connection errors
         """
-        return self._response is not None and self._response.get_code() or 0
+        return self._response.get_code() if self._response is not None else 0
 
     def _content(self):
         if self.headers is None:
@@ -579,3 +640,9 @@ class ResponseContextManager(FastResponse):
         if not isinstance(exc, Exception):
             exc = CatchResponseError(exc)
         self._manual_result = exc
+
+
+class RestResponseContextManager(ResponseContextManager):
+    js: dict  # This is technically an Optional, but I dont want to force everyone to check it
+    error: Exception  # This one too
+    headers: Headers  # .. and this one

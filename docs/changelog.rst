@@ -4,6 +4,43 @@ Changelog Highlights
 
 For full details of the Locust changelog, please see https://github.com/locustio/locust/blob/master/CHANGELOG.md
 
+2.15.1
+======
+* Add PERCENTILES_TO_CHART param in stats.py to make the Response Time Chart configurable https://github.com/locustio/locust/pull/2313
+
+2.15.0
+======
+* Add is_secret option for custom args to be shown in the web UI masked https://github.com/locustio/locust/pull/2284
+* Breaking change: Remove deprecated request_success and request_failure event handlers (unified request handler was introduced in 1.5) https://github.com/locustio/locust/pull/2306
+
+2.14.2
+======
+* Re-add py.typed marker file to package (it was missing in 2.14.1) https://github.com/locustio/locust/pull/2282
+
+2.14.1
+======
+* Add --json to send stats to stdout as json by @AndersSpringborg in https://github.com/locustio/locust/pull/2269
+
+2.14.0
+======
+* Add rest method to FastHttpUser to facilitate easy REST/JSON API testing https://github.com/locustio/locust/pull/2274
+
+2.13.2
+======
+* Fix: Ask worker to reconnect if master gets a broken RPC message by @marcinh in https://github.com/locustio/locust/pull/2271
+
+2.13.1
+======
+* Document har2locust (auto generation of locustfiles from browser recordings) by @cyberw in https://github.com/locustio/locust/pull/2259
+* Dont reset connection to worker if master receives a corrupted zmq message by @marcinh in https://github.com/locustio/locust/pull/2266
+* Other minor fixes
+
+2.13.0
+======
+* Add the ability to set default_headers on FastHttpUser by @cyberw in https://github.com/locustio/locust/pull/2231
+* Web UI: URL link on the host name for easy navigation by @JonanOribe in https://github.com/locustio/locust/pull/2228
+* Add support for time strings for --stop timeout (e.g. "5m30s") @cyberw in https://github.com/locustio/locust/pull/2239
+
 2.12.1
 ======
 * Allow setting run time from the web UI & http api by @ajt89 in https://github.com/locustio/locust/pull/2202

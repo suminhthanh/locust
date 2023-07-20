@@ -2,6 +2,7 @@ from __future__ import annotations
 from abc import abstractmethod
 import datetime
 import hashlib
+import json
 from tempfile import NamedTemporaryFile
 import time
 from collections import namedtuple, OrderedDict
@@ -131,6 +132,8 @@ CURRENT_RESPONSE_TIME_PERCENTILE_WINDOW = 10
 CachedResponseTimes = namedtuple("CachedResponseTimes", ["response_times", "num_requests"])
 
 PERCENTILES_TO_REPORT = [0.50, 0.66, 0.75, 0.80, 0.90, 0.95, 0.98, 0.99, 0.999, 0.9999, 1.0]
+
+PERCENTILES_TO_CHART = [0.50, 0.95]
 
 
 class RequestStatsAdditionError(Exception):
@@ -271,9 +274,7 @@ class RequestStats:
 
     def serialize_stats(self) -> List["StatsEntryDict"]:
         return [
-            self.entries[key].get_stripped_report()
-            for key in self.entries.keys()
-            if not (self.entries[key].num_requests == 0 and self.entries[key].num_failures == 0)
+            e.get_stripped_report() for e in self.entries.values() if not (e.num_requests == 0 and e.num_failures == 0)
         ]
 
     def serialize_errors(self) -> Dict[str, "StatsErrorDict"]:
@@ -330,7 +331,7 @@ class StatsEntry:
         OrderedDict that holds a copy of the response_times dict for each of the last 20 seconds.
         """
         self.total_content_length: int = 0
-        """ The sum of the content length of all the requests for this entry """
+        """ The sum of the content length of all the responses for this entry """
         self.start_time: float = 0.0
         """ Time of the first request for this entry """
         self.last_request_timestamp: Optional[float] = None
@@ -789,6 +790,10 @@ def print_stats(stats: RequestStats, current=True) -> None:
     console_logger.info("")
 
 
+def print_stats_json(stats: RequestStats) -> None:
+    print(json.dumps(stats.serialize_stats(), indent=4))
+
+
 def get_stats_summary(stats: RequestStats, current=True) -> List[str]:
     """
     stats summary will be returned as list of string
@@ -844,10 +849,9 @@ def get_percentile_stats_summary(stats: RequestStats) -> List[str]:
 
 
 def print_error_report(stats: RequestStats) -> None:
-    if not len(stats.errors):
-        return
-    for line in get_error_report_summary(stats):
-        console_logger.info(line)
+    if stats.errors:
+        for line in get_error_report_summary(stats):
+            console_logger.info(line)
 
 
 def get_error_report_summary(stats) -> List[str]:
@@ -883,11 +887,13 @@ def stats_history(runner: "Runner") -> None:
             break
         if runner.state != "stopped":
             r = {
-                "time": datetime.datetime.utcnow().strftime("%H:%M:%S"),
+                "time": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%H:%M:%S"),
                 "current_rps": stats.total.current_rps or 0,
                 "current_fail_per_sec": stats.total.current_fail_per_sec or 0,
-                "response_time_percentile_95": stats.total.get_current_response_time_percentile(0.95) or 0,
-                "response_time_percentile_50": stats.total.get_current_response_time_percentile(0.5) or 0,
+                "response_time_percentile_1": stats.total.get_current_response_time_percentile(PERCENTILES_TO_CHART[0])
+                or 0,
+                "response_time_percentile_2": stats.total.get_current_response_time_percentile(PERCENTILES_TO_CHART[1])
+                or 0,
                 "user_count": runner.user_count or 0,
             }
             stats.history.append(r)

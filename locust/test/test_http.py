@@ -145,23 +145,6 @@ class TestHttpSession(WebserverTestCase):
         s.request("get", "/wrong_url")
         self.assertEqual("Not Found", kwargs["response"].text)
 
-    def test_deprecated_request_events(self):
-        s = self.get_client()
-        status = {"success_amount": 0, "failure_amount": 0}
-
-        def on_success(**kw):
-            status["success_amount"] += 1
-
-        def on_failure(**kw):
-            status["failure_amount"] += 1
-
-        self.environment.events.request_success.add_listener(on_success)
-        self.environment.events.request_failure.add_listener(on_failure)
-        s.request("get", "/request_method")
-        s.request("get", "/wrong_url")
-        self.assertEqual(1, status["success_amount"])
-        self.assertEqual(1, status["failure_amount"])
-
     def test_error_message_with_name_replacement(self):
         s = self.get_client()
         kwargs = {}
@@ -265,6 +248,22 @@ class TestHttpSession(WebserverTestCase):
             pass
         self.assertEqual(1, self.environment.stats.total.num_requests)
         self.assertEqual(1, self.environment.stats.total.num_failures)
+
+    def test_catch_response_with_name_replacement(self):
+        s = self.get_client()
+        kwargs = {}
+
+        def on_request(**kw):
+            self.assertIsNotNone(kw["exception"])
+            kwargs.update(kw)
+
+        self.environment.events.request.add_listener(on_request)
+
+        with s.get("/wrong_url/01", name="replaced_url_name") as r:
+            pass
+
+        self.assertIn("for url: replaced_url_name", str(kwargs["exception"]))
+        self.assertEqual(s.base_url + "/wrong_url/01", kwargs["url"])  # url is unaffected by name
 
     def test_catch_response_missing_with_block(self):
         s = self.get_client()

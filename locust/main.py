@@ -13,7 +13,14 @@ from .argument_parser import parse_locustfile_option, parse_options
 from .env import Environment
 from .log import setup_logging, greenlet_exception_logger
 from . import stats
-from .stats import print_error_report, print_percentile_stats, print_stats, stats_printer, stats_history
+from .stats import (
+    print_error_report,
+    print_percentile_stats,
+    print_stats,
+    print_stats_json,
+    stats_printer,
+    stats_history,
+)
 from .stats import StatsCSV, StatsCSVFileWriter
 from .user.inspectuser import print_task_ratio, print_task_ratio_json
 from .util.timespan import parse_timespan
@@ -44,7 +51,6 @@ def create_environment(
         events=events,
         host=options.host,
         reset_stats=options.reset_stats,
-        stop_timeout=options.stop_timeout,
         parsed_options=options,
         available_user_classes=available_user_classes,
         available_shape_classes=available_shape_classes,
@@ -94,6 +100,24 @@ def main():
             user_classes[key] = value
             available_user_classes[key] = value
 
+    if len(stats.PERCENTILES_TO_CHART) != 2:
+        logging.error("stats.PERCENTILES_TO_CHART parameter should be 2 parameters \n")
+        sys.exit(1)
+
+    def is_valid_percentile(parameter):
+        try:
+            if 0 < float(parameter) < 1:
+                return True
+            return False
+        except ValueError:
+            return False
+
+    for percentile in stats.PERCENTILES_TO_CHART:
+        if not is_valid_percentile(percentile):
+            logging.error(
+                "stats.PERCENTILES_TO_CHART parameter need to be float and value between. 0 < percentile < 1 Eg 0.95\n"
+            )
+            sys.exit(1)
     # parse all command line options
     options = parse_options()
 
@@ -106,12 +130,6 @@ def main():
 
     if options.autoquit != -1 and not options.autostart:
         sys.stderr.write("--autoquit is only meaningful in combination with --autostart\n")
-        sys.exit(1)
-
-    if options.step_time or options.step_load or options.step_users or options.step_clients:
-        sys.stderr.write(
-            "The step load feature was removed in Locust 1.3. You can achieve similar results using a LoadTestShape class. See https://docs.locust.io/en/stable/custom-load-shape.html\n"
-        )
         sys.exit(1)
 
     if options.hatch_rate:
@@ -128,6 +146,13 @@ def main():
 
     logger = logging.getLogger(__name__)
     greenlet_exception_handler = greenlet_exception_logger(logger)
+
+    if options.stop_timeout:
+        try:
+            options.stop_timeout = parse_timespan(options.stop_timeout)
+        except ValueError:
+            logger.error("Valid --stop-timeout formats are: 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc.")
+            sys.exit(1)
 
     if options.list_commands:
         print("Available Users:")
@@ -153,7 +178,6 @@ def main():
         user_classes = list(user_classes.values())
 
     if os.name != "nt" and not options.master:
-
         try:
             import resource
 
@@ -173,6 +197,7 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
 
     # create locust Environment
     locustfile_path = None if not locustfile else os.path.basename(locustfile)
+
     environment = create_environment(
         user_classes,
         options,
@@ -232,13 +257,6 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
             options.run_time = parse_timespan(options.run_time)
         except ValueError:
             logger.error("Valid --run-time formats are: 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc.")
-            sys.exit(1)
-
-    if options.stop_timeout:
-        try:
-            options.stop_timeout = parse_timespan(options.stop_timeout)
-        except ValueError:
-            logger.error("Valid --stop-timeout formats are: 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc.")
             sys.exit(1)
 
     if options.csv_prefix:
@@ -306,7 +324,7 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
             logger.info("--run-time limit reached, stopping test")
             runner.stop()
             if options.autoquit != -1:
-                logger.debug(f"Autoquit time limit set to {options.autoquit} seconds")
+                logger.debug("Autoquit time limit set to %s seconds" % options.autoquit)
                 time.sleep(options.autoquit)
                 logger.info("--autoquit time reached, shutting down")
                 runner.quit()
@@ -435,8 +453,9 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         logger.debug("Cleaning up runner...")
         if runner is not None:
             runner.quit()
-
-        if not isinstance(runner, locust.runners.WorkerRunner):
+        if options.json:
+            print_stats_json(runner.stats)
+        elif not isinstance(runner, locust.runners.WorkerRunner):
             print_stats(runner.stats, current=False)
             print_percentile_stats(runner.stats)
             print_error_report(runner.stats)

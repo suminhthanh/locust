@@ -119,12 +119,23 @@ the :ref:`name parameter <name-parameter>` to group all those requests under an 
 Additionally we've declared an `on_start` method. A method with this name will be called for each simulated
 user when they start. For more info see :ref:`on-start-on-stop`.
 
+Auto-generating a locustfile
+============================
+
+You can use `har2locust <https://github.com/SvenskaSpel/har2locust>`_ to generate locustfiles based on a browser recording (HAR-file).
+
+It is particularly useful for beginners that are not used to writing their own locustfile, but also highly customizable for more advanced use cases.
+
+.. note::
+
+    har2locust is still in beta. It may not always generate correct locustfiles, and its interface may change between versions.
+
 User class
 ==========
 
-A user class represents one user (or a swarming locust if you will). Locust will spawn one
-instance of the User class for each user that is being simulated. There are some common attributes that
-a User class may define.
+A user class represents one type of user/scenario for your system. When you do a test run you specify the number of concurrent 
+users you want to simulate and Locust will create an instance per user. You can add any attributes you like to these 
+classes/instances, but there are some that have special meaning to Locust:
 
 .. _wait-time:
 
@@ -532,12 +543,10 @@ You can even avoid logging a request at all by throwing an exception and then ca
         if response.status_code == 404:
             raise RescheduleTask()
 
-.. _rest:
-
 REST/JSON APIs
 --------------
 
-Here's an example of how to call a REST API and validate the response:
+:ref:`FastHttpUser <rest>` provides a ready-made ``rest`` method, but you can also do it yourself:
 
 .. code-block:: python
 
@@ -551,8 +560,6 @@ Here's an example of how to call a REST API and validate the response:
             response.failure("Response could not be decoded as JSON")
         except KeyError:
             response.failure("Response did not contain expected key 'greeting'")
-
-locust-plugins has a ready-made class for testing REST API:s called `RestUser <https://github.com/SvenskaSpel/locust-plugins/blob/master/examples/rest_ex.py>`_.
 
 .. _name-parameter:
 
@@ -599,6 +606,12 @@ If you want to chain multiple groupings with minimal boilerplate, you can use th
             for i in range(10):
                 self.client.get("/article?id=%i" % i)
 
+Using :ref:`catch_response <catch-response>` and accessing `request_meta <https://github.com/locustio/locust/blob/master/locust/clients.py#L145>`_ directly, you can even rename requests based on something in the response.
+
+.. code-block:: python
+
+    with self.client.get("/", catch_response=True) as resp:
+        resp.request_meta["name"] = resp.json()["name"]
 
 
 HTTP Proxy settings
@@ -633,6 +646,10 @@ TaskSets
 ================================
 TaskSets is a way to structure tests of hierarchical web sites/systems. You can :ref:`read more about it here <tasksets>`.
 
+Examples
+========
+
+There are lots of locustfile examples `here <https://github.com/locustio/locust/tree/master/examples>`_
 
 How to structure your test code
 ================================

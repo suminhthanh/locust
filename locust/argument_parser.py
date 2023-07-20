@@ -1,9 +1,8 @@
-import argparse
 import os
 import platform
 import sys
 import textwrap
-from typing import Dict, List
+from typing import Dict, List, NamedTuple, Optional
 
 import configargparse
 
@@ -27,18 +26,29 @@ class LocustArgumentParser(configargparse.ArgumentParser):
 
         Arguments:
             include_in_web_ui: If True (default), the argument will show in the UI.
+            is_secret: If True (default is False) and include_in_web_ui is True, the argument will show in the UI with a password masked text input.
 
         Returns:
             argparse.Action: the new argparse action
         """
         include_in_web_ui = kwargs.pop("include_in_web_ui", True)
+        is_secret = kwargs.pop("is_secret", False)
         action = super().add_argument(*args, **kwargs)
         action.include_in_web_ui = include_in_web_ui
+        action.is_secret = is_secret
         return action
 
     @property
     def args_included_in_web_ui(self) -> Dict[str, configargparse.Action]:
         return {a.dest: a for a in self._actions if hasattr(a, "include_in_web_ui") and a.include_in_web_ui}
+
+    @property
+    def secret_args_included_in_web_ui(self) -> Dict[str, configargparse.Action]:
+        return {
+            a.dest: a
+            for a in self._actions
+            if a.dest in self.args_included_in_web_ui and hasattr(a, "is_secret") and a.is_secret
+        }
 
 
 def _is_package(path):
@@ -133,8 +143,8 @@ def get_empty_argument_parser(add_help=True, default_config_files=DEFAULT_CONFIG
         add_env_var_help=False,
         add_config_file_help=False,
         add_help=add_help,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        usage=argparse.SUPPRESS,
+        formatter_class=configargparse.RawDescriptionHelpFormatter,
+        usage=configargparse.SUPPRESS,
         description=textwrap.dedent(
             """
             Usage: locust [OPTIONS] [UserClass ...]
@@ -305,7 +315,7 @@ def setup_parser_arguments(parser):
     web_ui_group.add_argument(
         "--autostart",
         action="store_true",
-        help="Starts the test immediately (without disabling the web UI). Use -u and -t to control user count and run time",
+        help="Starts the test immediately (like --headless, but without disabling the web UI)",
         env_var="LOCUST_AUTOSTART",
     )
     web_ui_group.add_argument(
@@ -468,13 +478,13 @@ Only the LOCUSTFILE (-f option) needs to be specified when starting a Worker, si
     stats_group.add_argument(
         "--print-stats",
         action="store_true",
-        help="Print stats in the console",
+        help="Enable periodic printing of request stats in UI runs",
         env_var="LOCUST_PRINT_STATS",
     )
     stats_group.add_argument(
         "--only-summary",
         action="store_true",
-        help="Only print the summary stats",
+        help="Disable periodic printing of request stats during --headless run",
         env_var="LOCUST_ONLY_SUMMARY",
     )
     stats_group.add_argument(
@@ -488,6 +498,12 @@ Only the LOCUSTFILE (-f option) needs to be specified when starting a Worker, si
         dest="html_file",
         help="Store HTML report to file path specified",
         env_var="LOCUST_HTML",
+    )
+    stats_group.add_argument(
+        "--json",
+        default=False,
+        action="store_true",
+        help="Prints the final stats in JSON format to stdout. Useful for parsing the results in other programs/scripts. Use together with --headless and --skip-log for an output only with the json data.",
     )
 
     log_group = parser.add_argument_group("Logging options")
@@ -511,12 +527,6 @@ Only the LOCUSTFILE (-f option) needs to be specified when starting a Worker, si
         help="Path to log file. If not set, log will go to stderr",
         env_var="LOCUST_LOGFILE",
     )
-
-    step_load_group = parser.add_argument_group("Step load options")
-    step_load_group.add_argument("--step-load", action="store_true", help=configargparse.SUPPRESS)
-    step_load_group.add_argument("--step-users", type=int, help=configargparse.SUPPRESS)
-    step_load_group.add_argument("--step-clients", action="store_true", help=configargparse.SUPPRESS)
-    step_load_group.add_argument("--step-time", help=configargparse.SUPPRESS)
 
     other_group = parser.add_argument_group("Other options")
     other_group.add_argument(
@@ -548,9 +558,8 @@ Only the LOCUSTFILE (-f option) needs to be specified when starting a Worker, si
         "-s",
         "--stop-timeout",
         action="store",
-        type=int,
         dest="stop_timeout",
-        default=None,
+        default="0",
         help="Number of seconds to wait for a simulated user to complete any executing task before exiting. Default is to terminate immediately. This parameter only needs to be specified for the master process when running Locust distributed.",
         env_var="LOCUST_STOP_TIMEOUT",
     )
@@ -574,7 +583,8 @@ Only the LOCUSTFILE (-f option) needs to be specified when starting a Worker, si
         "user_classes",
         nargs="*",
         metavar="UserClass",
-        help="Optionally specify which User classes that should be used (available User classes can be listed with -l or --list)",
+        help="Optionally specify which User classes that should be used (available User classes can be listed with -l or --list). LOCUST_USER_CLASSES environment variable can also be used to specify User classes",
+        default=os.environ.get("LOCUST_USER_CLASSES", "").split(),
     )
 
 
@@ -605,14 +615,31 @@ def default_args_dict() -> dict:
     return vars(default_parser.parse([]))
 
 
-def ui_extra_args_dict(args=None) -> Dict[str, str]:
+class UIExtraArgOptions(NamedTuple):
+    default_value: str
+    is_secret: bool
+    help_text: str
+    choices: Optional[List[str]] = None
+
+
+def ui_extra_args_dict(args=None) -> Dict[str, UIExtraArgOptions]:
     """Get all the UI visible arguments"""
     locust_args = default_args_dict()
 
     parser = get_parser()
     all_args = vars(parser.parse_args(args))
 
-    extra_args = {k: v for k, v in all_args.items() if k not in locust_args and k in parser.args_included_in_web_ui}
+    extra_args = {
+        k: UIExtraArgOptions(
+            default_value=v,
+            is_secret=k in parser.secret_args_included_in_web_ui,
+            help_text=parser.args_included_in_web_ui[k].help,
+            choices=parser.args_included_in_web_ui[k].choices,
+        )
+        for k, v in all_args.items()
+        if k not in locust_args and k in parser.args_included_in_web_ui
+    }
+
     return extra_args
 
 

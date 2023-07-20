@@ -1,12 +1,14 @@
+import json
 import os
 import platform
+
 import pty
 import signal
 import subprocess
 import textwrap
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from subprocess import PIPE, STDOUT
+from subprocess import PIPE, STDOUT, DEVNULL
 
 import gevent
 import requests
@@ -190,6 +192,54 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
             self.assertIn("Shutting down (exit code 0)", stderr)
             self.assertEqual(0, proc.returncode)
 
+    def test_percentile_parameter(self):
+        port = get_free_tcp_port()
+        with temporary_file(
+            content=textwrap.dedent(
+                """
+            from locust import User, task, constant, events
+            from locust.stats import PERCENTILES_TO_CHART
+            PERCENTILES_TO_CHART[0] = 0.9
+            PERCENTILES_TO_CHART[1] = 0.4
+            class TestUser(User):
+                wait_time = constant(3)
+                @task
+                def my_task(self):
+                    print("running my_task()")
+        """
+            )
+        ) as file_path:
+            proc = subprocess.Popen(
+                ["locust", "-f", file_path, "--web-port", str(port), "--autostart"], stdout=PIPE, stderr=PIPE, text=True
+            )
+            gevent.sleep(1)
+            response = requests.get(f"http://localhost:{port}/")
+            self.assertEqual(200, response.status_code)
+            proc.send_signal(signal.SIGTERM)
+            stdout, stderr = proc.communicate()
+            self.assertIn("Starting web interface at", stderr)
+
+    def test_invalid_percentile_parameter(self):
+        with temporary_file(
+            content=textwrap.dedent(
+                """
+            from locust import User, task, constant, events
+            from locust.stats import PERCENTILES_TO_CHART
+            PERCENTILES_TO_CHART[0] = 1.2
+            class TestUser(User):
+                wait_time = constant(3)
+                @task
+                def my_task(self):
+                    print("running my_task()")
+        """
+            )
+        ) as file_path:
+            proc = subprocess.Popen(["locust", "-f", file_path, "--autostart"], stdout=PIPE, stderr=PIPE, text=True)
+            gevent.sleep(1)
+            stdout, stderr = proc.communicate()
+            self.assertIn("parameter need to be float and value between. 0 < percentile < 1 Eg 0.95", stderr)
+            self.assertEqual(1, proc.returncode)
+
     def test_webserver_multiple_locustfiles(self):
         with mock_locustfile(content=MOCK_LOCUSTFILE_CONTENT_A) as mocked1:
             with mock_locustfile(content=MOCK_LOCUSTFILE_CONTENT_B) as mocked2:
@@ -265,7 +315,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
 
     def test_default_headless_spawn_options(self):
         with mock_locustfile() as mocked:
-            output = subprocess.check_output(
+            proc = subprocess.Popen(
                 [
                     "locust",
                     "-f",
@@ -279,12 +329,38 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     "DEBUG",
                     "--exit-code-on-error",
                     "0",
+                    # just to test --stop-timeout argument parsing, doesnt actually validate its function:
+                    "--stop-timeout",
+                    "1s",
                 ],
-                stderr=subprocess.STDOUT,
-                timeout=3,
+                stdout=PIPE,
+                stderr=PIPE,
                 text=True,
-            ).strip()
-            self.assertIn('Spawning additional {"UserSubclass": 1} ({"UserSubclass": 0} already running)...', output)
+            )
+            stdout, stderr = proc.communicate(timeout=4)
+            self.assertNotIn("Traceback", stderr)
+            self.assertIn('Spawning additional {"UserSubclass": 1} ({"UserSubclass": 0} already running)...', stderr)
+            self.assertEqual(0, proc.returncode)
+
+    def test_invalid_stop_timeout_string(self):
+        with mock_locustfile() as mocked:
+            proc = subprocess.Popen(
+                [
+                    "locust",
+                    "-f",
+                    mocked.file_path,
+                    "--host",
+                    "https://test.com/",
+                    "--stop-timeout",
+                    "asdf1",
+                ],
+                stdout=PIPE,
+                stderr=PIPE,
+                text=True,
+            )
+            stdout, stderr = proc.communicate()
+            self.assertIn("ERROR/locust.main: Valid --stop-timeout formats are", stderr)
+            self.assertEqual(1, proc.returncode)
 
     def test_headless_spawn_options_wo_run_time(self):
         with mock_locustfile() as mocked:
@@ -1373,6 +1449,61 @@ class SecondUser(HttpUser):
 
             self.assertEqual(0, proc.returncode)
             self.assertEqual(0, proc_worker.returncode)
+
+    def test_json_schema(self):
+        LOCUSTFILE_CONTENT = textwrap.dedent(
+            """
+            from locust import HttpUser, task, constant
+
+            class QuickstartUser(HttpUser):
+                wait_time = constant(1)
+
+                @task
+                def hello_world(self):
+                    self.client.get("/")
+
+            """
+        )
+        with mock_locustfile(content=LOCUSTFILE_CONTENT) as mocked:
+            proc = subprocess.Popen(
+                [
+                    "locust",
+                    "-f",
+                    mocked.file_path,
+                    "--host",
+                    "http://google.com",
+                    "--headless",
+                    "-u",
+                    "1",
+                    "-t",
+                    "2s",
+                    "--json",
+                ],
+                stderr=DEVNULL,
+                stdout=PIPE,
+                text=True,
+            )
+            stdout, stderr = proc.communicate()
+
+            try:
+                data = json.loads(stdout)
+            except json.JSONDecodeError:
+                self.fail(f"Trying to parse {stdout} as json failed")
+
+            self.assertEqual(0, proc.returncode)
+
+            result = data[0]
+            self.assertEqual(float, type(result["last_request_timestamp"]))
+            self.assertEqual(float, type(result["start_time"]))
+            self.assertEqual(int, type(result["num_requests"]))
+            self.assertEqual(int, type(result["num_none_requests"]))
+            self.assertEqual(float, type(result["total_response_time"]))
+            self.assertEqual(float, type(result["max_response_time"]))
+            self.assertEqual(float, type(result["min_response_time"]))
+            self.assertEqual(int, type(result["total_content_length"]))
+            self.assertEqual(dict, type(result["response_times"]))
+            self.assertEqual(dict, type(result["num_reqs_per_sec"]))
+            self.assertEqual(dict, type(result["num_fail_per_sec"]))
 
     def test_worker_indexes(self):
         content = """

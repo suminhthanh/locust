@@ -47,6 +47,8 @@ from .util import patch_env
 
 NETWORK_BROKEN = "network broken"
 BAD_MESSAGE = "bad message"
+UNRECOGNIZED_HOST_MESSAGE = "unrecognized host message"
+UNRECOGNIZED_MESSAGE = "unrecognized message"
 
 
 def mocked_rpc(raise_on_close=True):
@@ -82,7 +84,11 @@ def mocked_rpc(raise_on_close=True):
             if msg.data == NETWORK_BROKEN:
                 raise RPCError()
             if msg.data == BAD_MESSAGE:
-                raise RPCReceiveError("Bad message")
+                raise RPCReceiveError(BAD_MESSAGE, addr=msg.node_id)
+            if msg.data == UNRECOGNIZED_HOST_MESSAGE:
+                raise RPCReceiveError(UNRECOGNIZED_HOST_MESSAGE, addr="FAKE")
+            if msg.data == UNRECOGNIZED_MESSAGE:
+                raise RPCReceiveError(UNRECOGNIZED_MESSAGE)
             return msg.node_id, msg
 
         def close(self, linger=None):
@@ -107,7 +113,7 @@ class mocked_options:
         self.master_bind_port = 5557
         self.heartbeat_liveness = 3
         self.heartbeat_interval = 1
-        self.stop_timeout = None
+        self.stop_timeout = 0.0
         self.connection_broken = False
 
     def reset_stats(self):
@@ -631,8 +637,7 @@ class TestLocustRunner(LocustRunnerTestCase):
             def my_task(self):
                 gevent.sleep(600)
 
-        stop_timeout = 0
-        env = Environment(user_classes=[TestUser1, TestUser2], stop_timeout=stop_timeout)
+        env = Environment(user_classes=[TestUser1, TestUser2])
         local_runner = env.create_local_runner()
         web_ui = env.create_web_ui("127.0.0.1", 0)
 
@@ -778,7 +783,7 @@ class TestLocustRunner(LocustRunnerTestCase):
             def my_task(self):
                 pass
 
-        env = Environment(user_classes=[MyUser1], stop_timeout=0)
+        env = Environment(user_classes=[MyUser1])
         local_runner = env.create_local_runner()
         web_ui = env.create_web_ui("127.0.0.1", 0)
 
@@ -828,7 +833,7 @@ class TestMasterWorkerRunners(LocustTestCase):
     def test_distributed_integration_run(self):
         """
         Full integration test that starts both a MasterRunner and three WorkerRunner instances
-        and makes sure that their stats is sent to the Master.
+        and makes sure that their stats is sent to the Master. Also validates worker_connect event
         """
 
         class TestUser(User):
@@ -848,13 +853,19 @@ class TestMasterWorkerRunners(LocustTestCase):
         with mock.patch("locust.runners.WORKER_REPORT_INTERVAL", new=0.3):
             # start a Master runner
             master_env = Environment(user_classes=[TestUser])
+            worker_connect_events = []
+
+            def on_connect(client_id):
+                worker_connect_events.append(client_id)
+
+            master_env.events.worker_connect.add_listener(on_connect)
             master = master_env.create_master_runner("*", 0)
             sleep(0)
             # start 3 Worker runners
             workers = []
             for i in range(3):
                 worker_env = Environment(user_classes=[TestUser])
-                worker = worker_env.create_worker_runner("127.0.0.1", master.server.port)
+                worker: WorkerRunner = worker_env.create_worker_runner("127.0.0.1", master.server.port)
                 workers.append(worker)
 
             # give workers time to connect
@@ -868,9 +879,12 @@ class TestMasterWorkerRunners(LocustTestCase):
             # give time for users to generate stats, and stats to be sent to master
             sleep(1)
             master.quit()
-            # make sure users are killed
+
             for worker in workers:
+                # make sure users are killed
                 self.assertEqual(0, worker.user_count)
+                # make sure events happened correctly
+                self.assertIn(worker.client_id, worker_connect_events)
 
         # check that stats are present in master
         self.assertGreater(
@@ -1280,6 +1294,7 @@ class TestMasterWorkerRunners(LocustTestCase):
             finally:
                 self.assertEqual(STATE_STOPPED, master.state)
 
+    @unittest.skip(reason="takes way too long (~45s)")
     def test_distributed_shape_with_stop_timeout(self):
         """
         Full integration test that starts both a MasterRunner and five WorkerRunner instances
@@ -1731,8 +1746,8 @@ class TestMasterWorkerRunners(LocustTestCase):
             "LOCUST_WORKER_ADDITIONAL_WAIT_BEFORE_READY_AFTER_STOP",
             str(locust_worker_additional_wait_before_ready_after_stop),
         ):
-            stop_timeout = 0
-            master_env = Environment(user_classes=[TestUser1], shape_class=TestShape(), stop_timeout=stop_timeout)
+            master_env = Environment(user_classes=[TestUser1], shape_class=TestShape())
+
             master_env.shape_class.reset_time()
             master = master_env.create_master_runner("*", 0)
 
@@ -1798,8 +1813,7 @@ class TestMasterWorkerRunners(LocustTestCase):
                 gevent.sleep(600)
 
         with mock.patch("locust.runners.WORKER_REPORT_INTERVAL", new=0.3):
-            stop_timeout = 0
-            master_env = Environment(user_classes=[TestUser1, TestUser2], stop_timeout=stop_timeout)
+            master_env = Environment(user_classes=[TestUser1, TestUser2])
             master = master_env.create_master_runner("*", 0)
             web_ui = master_env.create_web_ui("127.0.0.1", 0)
 
@@ -3048,6 +3062,52 @@ class TestMasterRunner(LocustRunnerTestCase):
                 "reconnect", server.outbox[2][1].type, "Master didn't send worker reconnect message when expected."
             )
 
+    def test_worker_sends_unrecognized_message_to_master(self):
+        """
+        Validate master ignores message from worker when it cannot parse adddress info.
+        """
+
+        class TestUser(User):
+            @task
+            def my_task(self):
+                pass
+
+        with mock.patch("locust.rpc.rpc.Server", mocked_rpc()) as server:
+            master = self.get_runner(user_classes=[TestUser])
+            server.mocked_send(Message("client_ready", __version__, "zeh_fake_client1"))
+            self.assertEqual(1, len(master.clients))
+            self.assertTrue(
+                "zeh_fake_client1" in master.clients, "Could not find fake client in master instance's clients dict"
+            )
+
+            master.start(10, 10)
+            sleep(0.1)
+            server.mocked_send(Message("stats", UNRECOGNIZED_MESSAGE, "zeh_fake_client1"))
+            self.assertEqual(2, len(server.outbox))
+
+    def test_unknown_host_sends_message_to_master(self):
+        """
+        Validate master ignores message that is sent from unknown host
+        """
+
+        class TestUser(User):
+            @task
+            def my_task(self):
+                pass
+
+        with mock.patch("locust.rpc.rpc.Server", mocked_rpc()) as server:
+            master = self.get_runner(user_classes=[TestUser])
+            server.mocked_send(Message("client_ready", __version__, "zeh_fake_client1"))
+            self.assertEqual(1, len(master.clients))
+            self.assertTrue(
+                "zeh_fake_client1" in master.clients, "Could not find fake client in master instance's clients dict"
+            )
+
+            master.start(10, 10)
+            sleep(0.1)
+            server.mocked_send(Message("stats", UNRECOGNIZED_HOST_MESSAGE, "unknown_host"))
+            self.assertEqual(2, len(server.outbox))
+
 
 class TestWorkerRunner(LocustTestCase):
     def setUp(self):
@@ -3118,9 +3178,7 @@ class TestWorkerRunner(LocustTestCase):
                 MyTestUser._test_state = 2
 
         with mock.patch("locust.rpc.rpc.Client", mocked_rpc()) as client:
-            worker = self.get_runner(
-                environment=Environment(stop_timeout=None), user_classes=[MyTestUser], client=client
-            )
+            worker = self.get_runner(environment=Environment(), user_classes=[MyTestUser], client=client)
             self.assertEqual(1, len(client.outbox))
             self.assertEqual("client_ready", client.outbox[0].type)
             client.mocked_send(
@@ -3891,8 +3949,9 @@ class TestStopTimeout(LocustTestCase):
             tasks = [MySubTaskSet]
             wait_time = constant(3)
 
-        environment = create_environment([MyTestUser], mocked_options())
-        environment.stop_timeout = 0.3
+        options = mocked_options()
+        options.stop_timeout = 0.3
+        environment = create_environment([MyTestUser], options)
         runner = environment.create_local_runner()
         runner.start(1, 1, wait=True)
         gevent.sleep(0)

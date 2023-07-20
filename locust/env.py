@@ -41,7 +41,6 @@ class Environment:
         available_user_classes: Optional[Dict[str, User]] = None,
         available_shape_classes: Optional[Dict[str, LoadTestShape]] = None,
     ):
-
         self.runner: Optional[Runner] = None
         """Reference to the :class:`Runner <locust.runners.Runner>` instance"""
 
@@ -78,7 +77,12 @@ class Environment:
         """Base URL of the target system"""
         self.reset_stats = reset_stats
         """Determines if stats should be reset once all simulated users have been spawned"""
-        self.stop_timeout = stop_timeout
+        if stop_timeout is not None:
+            self.stop_timeout = stop_timeout
+        elif parsed_options:
+            self.stop_timeout = float(getattr(parsed_options, "stop_timeout", 0.0))
+        else:
+            self.stop_timeout = 0.0
         """
         If set, the runner will try to stop the running users gracefully and wait this many seconds
         before killing them hard.
@@ -89,7 +93,7 @@ class Environment:
         If False, exceptions will be raised.
         """
         self.parsed_options = parsed_options
-        """Reference to the parsed command line options (used to pre-populate fields in Web UI). May be None when using Locust as a library"""
+        """Reference to the parsed command line options (used to pre-populate fields in Web UI). When using Locust as a library, this should either be `None` or an object created by `argument_parser.parse_args()`"""
         self.available_user_classes = available_user_classes
         """List of the available User Classes to pick from in the UserClass Picker"""
         self.available_shape_classes = available_shape_classes

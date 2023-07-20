@@ -10,6 +10,10 @@ Use it like this (assuming that the ``locustfile.py`` exists in the current work
 
     docker run -p 8089:8089 -v $PWD:/mnt/locust locustio/locust -f /mnt/locust/locustfile.py
 
+On Windows, this command will sometimes cause errors. Windows users should try using this instead::
+
+    docker run -p 8089:8089 --mount type=bind,source=$pwd,target=/mnt/locust locustio/locust -f /mnt/locust/locustfile.py
+
 
 Docker Compose
 ==============
@@ -35,10 +39,21 @@ official Locust docker image as a base image::
 
 
 Running a distributed load test on Kubernetes
-=============================================
+==============================================
 
-The easiest way to run Locust on Kubernetes is to use a `Helm chart <https://helm.sh/>`_.
+HELM
+*****
+
+One of the ways to run Locust on Kubernetes is to use a `Helm chart <https://helm.sh/>`_.
 
 There is a good helm chart here: `github.com/deliveryhero/helm-charts <https://github.com/deliveryhero/helm-charts/tree/master/stable/locust>`_.
 
-Note: this Helm chart is a separate project, and not supported by Locust maintainers.
+Note: this Helm chart is a separate project, and not supported by Locust maintainers. 
+
+Kubernetes Operator
+*******************
+Another way to run Locust on Kubernetes is to use the `Locust Kubernetes Operator <https://abdelrhmanhamouda.github.io/locust-k8s-operator/>`_.
+
+The Locust Operator is designed to unlock easy, seamless & effortless distributed performance testing in the cloud.
+
+Note: the Locust Kubernetes Operator is a separate project and is not supported by Locust maintainers. 

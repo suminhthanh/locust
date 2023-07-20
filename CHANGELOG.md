@@ -1,6 +1,153 @@
 # Detailed changelog
 The most important changes can also be found in [the documentation](https://docs.locust.io/en/latest/changelog.html).
 
+## [2.15.1](https://github.com/locustio/locust/tree/2.15.1) (2023-03-14)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.15.0...2.15.1)
+
+**Closed issues:**
+
+- Ability to specify percentiles you need for response time chart [\#2311](https://github.com/locustio/locust/issues/2311)
+- locust k8s operator [\#2188](https://github.com/locustio/locust/issues/2188)
+
+**Merged pull requests:**
+
+- Update helper text [\#2317](https://github.com/locustio/locust/pull/2317) ([rafaelhdr](https://github.com/rafaelhdr))
+- Add PERCENTILES\_TO\_CHART param in stats.py to make the Response Time Chart configurable [\#2313](https://github.com/locustio/locust/pull/2313) ([A1BOCO](https://github.com/A1BOCO))
+
+## [2.15.0](https://github.com/locustio/locust/tree/2.15.0) (2023-02-28)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.14.2...2.15.0)
+
+**Fixed bugs:**
+
+- "Download as PNG" text gets cut off [\#2307](https://github.com/locustio/locust/issues/2307)
+- New worker fails to connect until master restart [\#2302](https://github.com/locustio/locust/issues/2302)
+
+**Merged pull requests:**
+
+- Fix locustio/locust\#2302 unknown worker spawning message [\#2309](https://github.com/locustio/locust/pull/2309) ([ykvch](https://github.com/ykvch))
+- Prevent Download as PNG text from getting cut off [\#2308](https://github.com/locustio/locust/pull/2308) ([allison-strandberg](https://github.com/allison-strandberg))
+- Remove request\_success and request\_failure event handlers [\#2306](https://github.com/locustio/locust/pull/2306) ([cyberw](https://github.com/cyberw))
+- Remove verbose FastHttpUser error messages [\#2301](https://github.com/locustio/locust/pull/2301) ([cyberw](https://github.com/cyberw))
+- fix: docs describing running without web UI had improper flag -f. Cor… [\#2297](https://github.com/locustio/locust/pull/2297) ([adriangonciarz](https://github.com/adriangonciarz))
+- Update performance estimates for modern Python and hardware [\#2295](https://github.com/locustio/locust/pull/2295) ([cyberw](https://github.com/cyberw))
+- docs \(\#2188\):  Add Locust Kubernetes Operator [\#2288](https://github.com/locustio/locust/pull/2288) ([AbdelrhmanHamouda](https://github.com/AbdelrhmanHamouda))
+- add events when initialize Environment [\#2285](https://github.com/locustio/locust/pull/2285) ([keegoo](https://github.com/keegoo))
+- add is\_secret option for custom args to be shown in the web UI masked [\#2284](https://github.com/locustio/locust/pull/2284) ([mzhukovs](https://github.com/mzhukovs))
+
+## [2.14.2](https://github.com/locustio/locust/tree/2.14.2) (2023-01-04)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.14.1...2.14.2)
+
+**Fixed bugs:**
+
+- 2.14.1 release missing py.typed file [\#2282](https://github.com/locustio/locust/issues/2282)
+
+## [2.14.1](https://github.com/locustio/locust/tree/2.14.1) (2023-01-03)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.14.0...2.14.1)
+
+**Fixed bugs:**
+
+- SetuptoolsDeprecationWarning when building with setuptools/65.5.0 [\#2279](https://github.com/locustio/locust/issues/2279)
+- Error installing locust using pipenv as a -- [\#2277](https://github.com/locustio/locust/issues/2277)
+
+**Merged pull requests:**
+
+- Fix setuptools deprecation warnings [\#2281](https://github.com/locustio/locust/pull/2281) ([heyman](https://github.com/heyman))
+- Improve documentation structure [\#2278](https://github.com/locustio/locust/pull/2278) ([THUzxj](https://github.com/THUzxj))
+- Fix exception grouping for requests with both catch\_response and name arguments [\#2276](https://github.com/locustio/locust/pull/2276) ([ianmetcalf](https://github.com/ianmetcalf))
+- remove typo in running cloud integration docs [\#2275](https://github.com/locustio/locust/pull/2275) ([WordsofDefiance](https://github.com/WordsofDefiance))
+- Stats in json to stdout \(new command line option --json\) [\#2269](https://github.com/locustio/locust/pull/2269) ([AndersSpringborg](https://github.com/AndersSpringborg))
+
+## [2.14.0](https://github.com/locustio/locust/tree/2.14.0) (2022-12-13)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.13.2...2.14.0)
+
+**Merged pull requests:**
+
+- Move the rest method into FastHttpUser instead of RestUser.  [\#2274](https://github.com/locustio/locust/pull/2274) ([cyberw](https://github.com/cyberw))
+- Add RestUser [\#2273](https://github.com/locustio/locust/pull/2273) ([cyberw](https://github.com/cyberw))
+- GRPC example - rewrite using interceptor [\#2272](https://github.com/locustio/locust/pull/2272) ([zifter](https://github.com/zifter))
+
+## [2.13.2](https://github.com/locustio/locust/tree/2.13.2) (2022-12-09)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.13.1...2.13.2)
+
+**Fixed bugs:**
+
+- docs: Small errors in docs [\#2253](https://github.com/locustio/locust/issues/2253)
+
+**Closed issues:**
+
+- UnboundLocalError after receiving ZMQ corrupted message [\#2260](https://github.com/locustio/locust/issues/2260)
+
+**Merged pull requests:**
+
+- Fix: Ask worker to reconnect if master gets a broken RPC message [\#2271](https://github.com/locustio/locust/pull/2271) ([marcinh](https://github.com/marcinh))
+
+## [2.13.1](https://github.com/locustio/locust/tree/2.13.1) (2022-12-01)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.13.0...2.13.1)
+
+**Fixed bugs:**
+
+- locust.io is down [\#2265](https://github.com/locustio/locust/issues/2265)
+- locust 2.13.0 failed to run [\#2263](https://github.com/locustio/locust/issues/2263)
+- Issue installing on M1 Mac [\#2249](https://github.com/locustio/locust/issues/2249)
+- 'Namespace' object has no attribute 'stop\_timeout' in version 2.13.0 [\#2243](https://github.com/locustio/locust/issues/2243)
+
+**Closed issues:**
+
+- locust test flask application [\#2255](https://github.com/locustio/locust/issues/2255)
+
+**Merged pull requests:**
+
+- Dont reset connection to worker if master receives a corrupted zmq message [\#2266](https://github.com/locustio/locust/pull/2266) ([marcinh](https://github.com/marcinh))
+- auto generated locustfiles from browser recordings using har2locust \(documentation\) [\#2259](https://github.com/locustio/locust/pull/2259) ([cyberw](https://github.com/cyberw))
+- Small fixes to documentation [\#2254](https://github.com/locustio/locust/pull/2254) ([jscanlannyc](https://github.com/jscanlannyc))
+- Added a better working docker command for Windows users [\#2248](https://github.com/locustio/locust/pull/2248) ([MagnusNordboe](https://github.com/MagnusNordboe))
+- Update documentation for Environment.parsed\_options [\#2247](https://github.com/locustio/locust/pull/2247) ([klazuka](https://github.com/klazuka))
+- Use C-style \(percent\) string formatting for all debug logging statements \(improves performance\) [\#2245](https://github.com/locustio/locust/pull/2245) ([cyberw](https://github.com/cyberw))
+- Replace datetime.utcnow\(\) with datetime.now\(tz=timezone.utc\), as it is kind of an antipattern [\#2244](https://github.com/locustio/locust/pull/2244) ([cyberw](https://github.com/cyberw))
+- Tiny performance enhancements [\#2240](https://github.com/locustio/locust/pull/2240) ([cyberw](https://github.com/cyberw))
+
+## [2.13.0](https://github.com/locustio/locust/tree/2.13.0) (2022-10-28)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.12.2...2.13.0)
+
+**Fixed bugs:**
+
+- `LoadTestShape` not included in the API docs [\#2232](https://github.com/locustio/locust/issues/2232)
+- ImportError: cannot import name 'OrderedDict' from 'typing' [\#2223](https://github.com/locustio/locust/issues/2223)
+
+**Merged pull requests:**
+
+- Fix issue with --stop timeout parsing time strings [\#2239](https://github.com/locustio/locust/pull/2239) ([cyberw](https://github.com/cyberw))
+- Make LoadTestShape a proper abstract class [\#2233](https://github.com/locustio/locust/pull/2233) ([cyberw](https://github.com/cyberw))
+- Add the ability to set default\_headers on FastHttpUser [\#2231](https://github.com/locustio/locust/pull/2231) ([cyberw](https://github.com/cyberw))
+- URL link on the host name for fast navigation to the API [\#2228](https://github.com/locustio/locust/pull/2228) ([JonanOribe](https://github.com/JonanOribe))
+
+## [2.12.2](https://github.com/locustio/locust/tree/2.12.2) (2022-10-14)
+
+[Full Changelog](https://github.com/locustio/locust/compare/2.12.1...2.12.2)
+
+**Fixed bugs:**
+
+- Class picker incorrectly populates Parsed Options [\#2192](https://github.com/locustio/locust/issues/2192)
+
+**Closed issues:**
+
+- Run time input for web-ui [\#2198](https://github.com/locustio/locust/issues/2198)
+
+**Merged pull requests:**
+
+- Run unit tests on Python 3.11 \(and explicitly support it\) [\#2225](https://github.com/locustio/locust/pull/2225) ([cyberw](https://github.com/cyberw))
+- Fix exception when someone sets both --headless and --autostart [\#2224](https://github.com/locustio/locust/pull/2224) ([cyberw](https://github.com/cyberw))
+- Delete the `CustomMessageListener` class for type consistency [\#2221](https://github.com/locustio/locust/pull/2221) ([samuelspagl](https://github.com/samuelspagl))
+- Output install location and version info when called with -V  [\#2213](https://github.com/locustio/locust/pull/2213) ([cyberw](https://github.com/cyberw))
+
 ## [2.12.1](https://github.com/locustio/locust/tree/2.12.1) (2022-09-21)
 
 [Full Changelog](https://github.com/locustio/locust/compare/2.12.0...2.12.1)
@@ -984,7 +1131,7 @@ The most important changes can also be found in [the documentation](https://docs
 **Merged pull requests:**
 
 - Remove Bad Apostrophe [\#1411](https://github.com/locustio/locust/pull/1411) ([curtisgibby](https://github.com/curtisgibby))
-- update \_\_init\_\_ file [\#1409](https://github.com/locustio/locust/pull/1409) ([manifiko](https://github.com/manifiko))
+- update \_\_init\_\_ file [\#1409](https://github.com/locustio/locust/pull/1409) ([iamtechnomage](https://github.com/iamtechnomage))
 - Rename 3 remaining instances of slave to worker [\#1400](https://github.com/locustio/locust/pull/1400) ([ibrahima](https://github.com/ibrahima))
 - The format for providing host can be confusing at times [\#1398](https://github.com/locustio/locust/pull/1398) ([jo19in1](https://github.com/jo19in1))
 - Ability to control the Locust process' exit code [\#1396](https://github.com/locustio/locust/pull/1396) ([heyman](https://github.com/heyman))

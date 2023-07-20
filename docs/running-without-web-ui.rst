@@ -28,12 +28,12 @@ Even in headless mode you can you can change the user count while the test is ru
 Setting a time limit for the test
 ---------------------------------
 
-If you want to specify the run time for a test, you can do that with ``-t/--run-time``:
+To specify the run time for a test, use ``-t/--run-time``:
 
 .. code-block:: console
 
-    $ locust -f --headless -u 100 --run-time 1h30m
-    $ locust -f --headless -u 100 --run-time 60 # default unit is seconds
+    $ locust --headless -u 100 --run-time 1h30m
+    $ locust --headless -u 100 --run-time 60 # default unit is seconds
 
 Locust will shut down once the time is up. Time is calculated from the start of the test (not from when ramp up has finished).
 
@@ -41,12 +41,12 @@ Locust will shut down once the time is up. Time is calculated from the start of 
 Allow tasks to finish their iteration on shutdown
 -------------------------------------------------
 
-By default, locust will stop your tasks immediately (without even waiting for requests to finish). 
-If you want to allow all running tasks to finish their iteration, you can use ``-s/--stop-timeout <seconds>``.
+By default, Locust will stop your tasks immediately (without even waiting for requests to finish). 
+To give running tasks some time to finish their iteration, use ``-s/--stop-timeout``:
 
 .. code-block:: console
 
-    $ locust --headless --run-time 1h30m --stop-timeout 10
+    $ locust --headless --run-time 1h30m --stop-timeout 10s
 
 .. _running-distributed-without-web-ui:
 

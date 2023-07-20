@@ -1699,6 +1699,7 @@ class TestRampDownUsersToZero(unittest.TestCase):
         self.assertTrue(0 <= delta <= _TOLERANCE, delta)
 
 
+@unittest.skip(reason="takes too long. run this manually if you change dispatch logic.")
 class TestRampUpThenDownThenUp(unittest.TestCase):
     def test_ramp_up_then_down_then_up(self):
         for user1_weight, user2_weight, user3_weight, user4_weight, user5_weight in [
@@ -3545,7 +3546,37 @@ class TestRampUpUsersFromZeroWithFixed(unittest.TestCase):
         iterations = list(users_dispatcher)
         self.assertDictEqual(iterations[-1]["1"], {"User1": 50, "User2": 50})
 
-    def test_ramp_up_ramp_down_and_rump_up_again(self):
+    def test_ramp_up_ramp_down_and_ramp_up_again_single_fixed_class(self):
+        class User1(User):
+            fixed_count = 2
+
+        class User2(User):
+            weight = 1
+
+        class User3(User):
+            weight = 3
+
+        user_classes = [User1, User3, User2]
+        workers = [WorkerNode("1")]
+
+        users_dispatcher = UsersDispatcher(worker_nodes=workers, user_classes=user_classes)
+
+        users_dispatcher.new_dispatch(target_user_count=5, spawn_rate=1)
+        users_dispatcher._wait_between_dispatch = 0
+        iterations = list(users_dispatcher)
+        self.assertDictEqual(iterations[-1]["1"], {"User1": 2, "User2": 1, "User3": 2})
+
+        users_dispatcher.new_dispatch(target_user_count=2, spawn_rate=1)
+        users_dispatcher._wait_between_dispatch = 0
+        iterations = list(users_dispatcher)
+        self.assertDictEqual(iterations[-1]["1"], {"User1": 2, "User2": 0, "User3": 0})
+
+        users_dispatcher.new_dispatch(target_user_count=7, spawn_rate=1)
+        users_dispatcher._wait_between_dispatch = 0
+        iterations = list(users_dispatcher)
+        self.assertDictEqual(iterations[-1]["1"], {"User1": 2, "User2": 1, "User3": 4})
+
+    def test_ramp_up_ramp_down_and_ramp_up_again(self):
         for weights, fixed_counts in [
             [(1, 1, 1, 1, 1), (100, 100, 50, 50, 200)],
             [(1, 1, 1, 1, 1), (100, 150, 50, 50, 0)],
@@ -3554,7 +3585,6 @@ class TestRampUpUsersFromZeroWithFixed(unittest.TestCase):
             [(1, 1, 1, 1, 1), (200, 0, 0, 0, 0)],
             [(1, 1, 1, 1, 1), (0, 0, 0, 0, 0)],
         ]:
-
             u1_weight, u2_weight, u3_weight, u4_weight, u5_weight = weights
             u1_fixed_count, u2_fixed_count, u3_fixed_count, u4_fixed_count, u5_fixed_count = fixed_counts
 
@@ -3588,7 +3618,6 @@ class TestRampUpUsersFromZeroWithFixed(unittest.TestCase):
 
                 for down_to_count in down_counts:
                     for target_user_count in target_user_counts:
-
                         # Ramp-up to go to `target_user_count` #########
 
                         users_dispatcher.new_dispatch(target_user_count=target_user_count, spawn_rate=1)
@@ -3601,6 +3630,7 @@ class TestRampUpUsersFromZeroWithFixed(unittest.TestCase):
                                 self.assertEqual(
                                     users_dispatcher._get_user_current_count(user_class.__name__),
                                     user_class.fixed_count,
+                                    msg=f"{user_class.__name__}, {target_user_count}",
                                 )
 
                         # Ramp-down to go to `down_to_count`

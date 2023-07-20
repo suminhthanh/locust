@@ -15,7 +15,7 @@
                 <div class="top_box box_url">
                     <div class="label">HOST</div>
                     <div class="value" id="host_url">
-                        {{ host or "" }}
+						<a id="host_url_link" href="" target="_blank"><span id="host_url_link_value">{{host}}</span></a>
                     </div>
                 </div>
                 <div class="top_box box_status">
@@ -89,7 +89,7 @@
                     <label for="host">
                         Host <span style="color:#8a8a8a;">(e.g. http://www.example.com)</span>
                         {% if override_host_warning %}
-                            <span style="color:#8a8a8a; font-size:12px;">(setting this will override the host on all User classes)</span></label>
+                            <span style="color:#8a8a8a; font-size:12px;">(setting this will override the host on all User classes)</span>
                         {% endif %}
                     </label>
                     <input type="text" name="host" id="host" class="val" autocapitalize="off" autocorrect="off" value="{{ host  or "" }}" onfocus="this.select()"/><br>
@@ -103,14 +103,27 @@
                     </div>
                     {% if extra_options %}<label>Custom parameters:</label>{% endif %}
                     {% for key, value in extra_options.items() %}
-                        {% if not ((value is none) or (value is boolean)) %}
-                            <label for="{{key}}">{{key}}</label>
-                            <input type="text" name="{{key}}" id="{{key}}" class="val" value="{{value}}" /><br>
+                        {% if not ((value.default_value is none) or (value.default_value is boolean)) %}
+                            <label for="{{key}}">
+                                {{key.replace('_', ' ').capitalize()}}
+                                {% if value.help_text %}
+                                    <span style="color:#8a8a8a;">({{value.help_text}})</span>
+                                {% endif %}
+                            </label>
+                            {% if value.choices %}
+                                <select name="{{key}}" id="{{key}}" class="val">
+                                    {% for choice in value.choices %}
+                                        <option value="{{choice}}" {% if choice == value.default_value %}selected{% endif %}>{{choice}}</option>
+                                    {% endfor %}
+                                </select><br>
+                            {% else %}
+                                <input type="{{'password' if value.is_secret else 'text'}}" name="{{key}}" id="{{key}}" class="val" value="{{value.default_value}}" /><br>
+                            {% endif %}
                         {% endif %}
                     {% endfor %}
                     {% set glob={'header_printed': False} %}
                     {% for key, value in extra_options.items() %}
-                        {% if (value is none) or (value is boolean) %}
+                        {% if (value.default_value is none) or (value.default_value is boolean) %}
                             {% if not glob.header_printed %}
                                 The following custom parameters can't be set in the Web UI, because it is a boolean or None type:<br>
                                 {% set _ = glob.update({'header_printed':True}) %}
@@ -120,7 +133,7 @@
                     {% endfor %}
                     <button type="submit">Start swarming</button>
                 </form>
-                <div style="clear:right;"></div>
+                <div style="clear:right;margin-bottom: 60px;"></div>
             </div>
         </div>
 
@@ -175,7 +188,7 @@
                         <tr>
                             <th class="stats_label" href="#" data-sortkey="method">Type</th>
                             <th class="stats_label" href="#" data-sortkey="name">Name</th>
-                            <th class="stats_label numeric nowrap" href="#" data-sortkey="num_requests" title="Number of successful requests"># Requests</th>
+                            <th class="stats_label numeric nowrap" href="#" data-sortkey="num_requests" title="Number of requests"># Requests</th>
                             <th class="stats_label numeric nowrap" href="#" data-sortkey="num_failures" title="Number of failures"># Fails</th>
                             <th class="stats_label numeric" href="#" data-sortkey="median_response_time" title="Median response time">Median (ms)</th>
                             <th class="stats_label numeric" href="#" data-sortkey="ninetieth_response_time" title="Ninetieth percentile response time, because the response time greater than 100ms is rounded, you may see it greater than the max response time">90%ile (ms)</th>
@@ -352,6 +365,8 @@
         ]]>
     </script>
     <script type="text/javascript">
+        var percentile1 = {{ percentile1|tojson }};
+        var percentile2 = {{ percentile2|tojson }};
         {% include 'stats_data.html' %}
     </script>
     <script type="text/javascript" src="./static/chart.js?v={{ version }}"></script>
